@@ -1,0 +1,41 @@
+duckling-0.2.0.1: unregistering (local file changes: Duckling/Api.hs)
+duckling> build (lib + exe + test) with ghc-9.2.5
+Preprocessing library for duckling-0.2.0.1..
+Building library for duckling-0.2.0.1..
+[525 of 804] Compiling Duckling.Api
+Preprocessing executable 'duckling-regen-exe' for duckling-0.2.0.1..
+Building executable 'duckling-regen-exe' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/duckling-regen-exe/duckling-regen-exe ...
+Preprocessing executable 'duckling-example-exe' for duckling-0.2.0.1..
+Building executable 'duckling-example-exe' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/duckling-example-exe/duckling-example-exe ...
+Preprocessing executable 'duckling-request-sample' for duckling-0.2.0.1..
+Building executable 'duckling-request-sample' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/duckling-request-sample/duckling-request-sample ...
+Preprocessing test suite 'duckling-test' for duckling-0.2.0.1..
+Building test suite 'duckling-test' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/duckling-test/duckling-test ...
+Preprocessing executable 'duckling-expensive' for duckling-0.2.0.1..
+Building executable 'duckling-expensive' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/duckling-expensive/duckling-expensive ...
+Preprocessing executable 'custom-dimension-example' for duckling-0.2.0.1..
+Building executable 'custom-dimension-example' for duckling-0.2.0.1..
+Linking .stack-work/dist/aarch64-linux-tinfo6-libc6-pre232/ghc-9.2.5/build/custom-dimension-example/custom-dimension-example ...
+duckling> copy/register
+Installing library in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/lib/aarch64-linux-ghc-9.2.5/duckling-0.2.0.1-CGEZEEqnUeeKWlz898bZdU
+Installing executable duckling-regen-exe in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/bin
+Installing executable duckling-example-exe in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/bin
+Installing executable duckling-request-sample in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/bin
+Installing executable duckling-expensive in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/bin
+Installing executable custom-dimension-example in /work/src/.stack-work/install/aarch64-linux-tinfo6-libc6-pre232/1c53b452743f8f0b78e1941f65f4ac2d68e7b42e6a48b01f1d1fd94da5f95309/9.2.5/bin
+Registering library for duckling-0.2.0.1..
+duckling> test (suite: duckling-test, args: --hide-successes)
+
+
+All 364 tests passed (6.56s)
+
+
+
+duckling> Test suite duckling-test passed
+Completed 2 action(s).
+exit=0

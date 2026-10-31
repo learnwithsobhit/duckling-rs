@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/duckling", "crates/duckling-server", "crates/duckling-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

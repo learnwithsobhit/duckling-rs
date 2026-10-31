@@ -1,0 +1,3 @@
+[submodule "vendor/duckling"]
+	path = vendor/duckling
+	url = https://github.com/facebook/duckling.git
