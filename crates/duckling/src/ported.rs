@@ -10,7 +10,18 @@ pub fn is_ported(locale: Locale, dim: Dim) -> bool {
         // Common rules plus EN's "email spelled out" rule. Other languages add their own rules
         // (e.g. AR digits, DE/FR "at"), so they are enabled per language as those are ported.
         (Lang::EN, Dim::Email | Dim::Url | Dim::PhoneNumber | Dim::CreditCardNumber) => true,
-        (Lang::EN, Dim::Numeral) => true,
+        (
+            Lang::EN,
+            Dim::Numeral
+            | Dim::Ordinal
+            | Dim::TimeGrain
+            | Dim::Duration
+            | Dim::Distance
+            | Dim::Temperature
+            | Dim::Volume
+            | Dim::Quantity
+            | Dim::AmountOfMoney,
+        ) => true,
         _ => false,
     }
 }

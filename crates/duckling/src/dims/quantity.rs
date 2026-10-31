@@ -93,3 +93,191 @@ impl QuantityData {
         }
     }
 }
+
+// ----- helpers + EN rules (`Duckling.Quantity.Helpers`, `.EN.Rules`) ----------------------
+
+use crate::dims::numeral::is_positive;
+use crate::dims::util::to_lower;
+use crate::types::{dimension, groups, pred, regex, rule, Dim, Rule, Token};
+use once_cell::sync::Lazy;
+
+fn tok(d: QuantityData) -> Option<Token> {
+    Some(Token::Quantity(d))
+}
+
+pub fn quantity(u: Unit, v: f64) -> QuantityData {
+    QuantityData { unit: Some(u), value: Some(v), aproduct: None, min_value: None, max_value: None, latent: false }
+}
+
+pub fn unit_only(u: Unit) -> QuantityData {
+    QuantityData { unit: Some(u), value: None, aproduct: None, min_value: None, max_value: None, latent: false }
+}
+
+pub fn value_only(v: f64) -> QuantityData {
+    QuantityData { unit: None, value: Some(v), aproduct: None, min_value: None, max_value: None, latent: false }
+}
+
+pub fn with_interval(from: f64, to: f64, mut q: QuantityData) -> QuantityData {
+    q.min_value = Some(from);
+    q.max_value = Some(to);
+    q
+}
+
+pub fn with_min(from: f64, mut q: QuantityData) -> QuantityData {
+    q.min_value = Some(from);
+    q
+}
+
+pub fn with_max(to: f64, mut q: QuantityData) -> QuantityData {
+    q.max_value = Some(to);
+    q
+}
+
+pub fn is_simple_quantity(t: &Token) -> bool {
+    matches!(t, Token::Quantity(QuantityData { unit: Some(_), value: Some(_), .. }))
+}
+
+/// `(value, unit)` of a simple quantity without a product.
+fn qv(t: &Token) -> Option<(f64, Unit)> {
+    match t {
+        Token::Quantity(QuantityData { value: Some(v), unit: Some(u), aproduct: None, .. }) => {
+            Some((*v, u.clone()))
+        }
+        _ => None,
+    }
+}
+
+fn numeral_value(t: &Token) -> Option<f64> {
+    match t {
+        Token::Numeral(n) => Some(n.value),
+        _ => None,
+    }
+}
+
+/// `getValue opsMap match`.
+fn get_value(m: &str, v: f64) -> f64 {
+    match to_lower(m).as_str() {
+        "milligram" | "milligrams" | "mg" | "mgs" | "m.g" | "m.gs" | "m.g." | "m.g.s" => v / 1000.0,
+        "kilogram" | "kilograms" | "kg" | "kgs" | "k.g" | "k.gs" | "k.g." | "k.g.s" => v * 1000.0,
+        _ => v,
+    }
+}
+
+const QUANTITIES: [(&str, &str, fn() -> Unit); 4] = [
+    ("<quantity> cups", "(cups?)", || Unit::Cup),
+    (
+        "<quantity> grams",
+        "(((m(illi)?[.]?)|(k(ilo)?)[.]?)?g(ram)?s?[.]?)[.]?",
+        || Unit::Gram,
+    ),
+    ("<quantity> lb", "((lb|pound)s?)", || Unit::Pound),
+    ("<quantity> oz", "((ounces?)|oz)", || Unit::Ounce),
+];
+
+static EN_RULES: Lazy<Vec<Rule>> = Lazy::new(|| {
+    let mut v: Vec<Rule> = vec![
+        rule("<quantity> of product", vec![dimension(Dim::Quantity), regex("of (\\w+)")], |ts| {
+            let q = match ts.first()? {
+                Token::Quantity(q) => q,
+                _ => return None,
+            };
+            let p = groups(&ts[1..])?.first()?.clone();
+            let mut q = q.clone();
+            q.aproduct = Some(to_lower(&p));
+            tok(q)
+        }),
+        rule(
+            "over/above/exceeding/beyond/at least/more than <quantity>",
+            vec![
+                regex("over|above|exceeding|beyond|at least|(more|larger|bigger|heavier) than"),
+                pred(is_simple_quantity),
+            ],
+            |ts| {
+                let (from, u) = qv(ts.get(1)?)?;
+                tok(with_min(from, unit_only(u)))
+            },
+        ),
+        rule(
+            "under/below/less/lower/at most/no more than <dist>",
+            vec![regex("under|below|at most|(less|lower|not? more) than"), pred(is_simple_quantity)],
+            |ts| {
+                let (to, u) = qv(ts.get(1)?)?;
+                tok(with_max(to, unit_only(u)))
+            },
+        ),
+        rule(
+            "between|from <numeral> and|to <quantity>",
+            vec![regex("between|from"), pred(is_positive), regex("to|and"), pred(is_simple_quantity)],
+            |ts| {
+                let from = numeral_value(ts.get(1)?)?;
+                let (to, u) = qv(ts.get(3)?)?;
+                if from < to { tok(with_interval(from, to, unit_only(u))) } else { None }
+            },
+        ),
+        rule(
+            "between|from <quantity> to|and <quantity>",
+            vec![regex("between|from"), pred(is_simple_quantity), regex("and|to"), pred(is_simple_quantity)],
+            |ts| {
+                let (from, u1) = qv(ts.get(1)?)?;
+                let (to, u2) = qv(ts.get(3)?)?;
+                if from < to && u1 == u2 { tok(with_interval(from, to, unit_only(u1))) } else { None }
+            },
+        ),
+        rule(
+            "<numeral> - <quantity>",
+            vec![pred(is_positive), regex("\\-"), pred(is_simple_quantity)],
+            |ts| {
+                let from = numeral_value(ts.first()?)?;
+                let (to, u) = qv(ts.get(2)?)?;
+                if from < to { tok(with_interval(from, to, unit_only(u))) } else { None }
+            },
+        ),
+        rule(
+            "<quantity> - <quantity>",
+            vec![pred(is_simple_quantity), regex("\\-"), pred(is_simple_quantity)],
+            |ts| {
+                let (from, u1) = qv(ts.first()?)?;
+                let (to, u2) = qv(ts.get(2)?)?;
+                if from < to && u1 == u2 { tok(with_interval(from, to, unit_only(u1))) } else { None }
+            },
+        ),
+        rule(
+            "about|exactly <quantity>",
+            vec![
+                regex("\\~|exactly|precisely|about|approx(\\.|imately)?|close to|near( to)?|around|almost"),
+                dimension(Dim::Quantity),
+            ],
+            |ts| ts.get(1).map(|t| (*t).clone()),
+        ),
+        rule("<quantity> (latent)", vec![pred(is_positive)], |ts| {
+            let v = numeral_value(ts.first()?)?;
+            let mut q = value_only(v);
+            q.latent = true;
+            tok(q)
+        }),
+    ];
+    for (name, re, unit) in QUANTITIES {
+        v.push(rule(name, vec![pred(is_positive), regex(re)], move |ts| {
+            let n = numeral_value(ts.first()?)?;
+            let m = match ts.get(1)? {
+                Token::RegexMatch(g) => g.0.first()?.clone(),
+                _ => return None,
+            };
+            tok(quantity(unit(), get_value(&m, n)))
+        }));
+    }
+    for (name, re, unit) in QUANTITIES {
+        v.push(rule(name, vec![regex(&format!("an? {}", re))], move |ts| {
+            let m = match ts.first()? {
+                Token::RegexMatch(g) => g.0.first()?.clone(),
+                _ => return None,
+            };
+            tok(quantity(unit(), get_value(&m, 1.0)))
+        }));
+    }
+    v
+});
+
+pub fn en_rules() -> &'static [Rule] {
+    &EN_RULES
+}

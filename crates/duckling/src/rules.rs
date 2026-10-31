@@ -35,19 +35,32 @@ pub fn explicit_dimensions(targets: &HashSet<Dim>) -> BTreeSet<Dim> {
 /// `Duckling.Rules.Common.rules`.
 fn common_rules(dim: Dim) -> Vec<&'static Rule> {
     match dim {
+        Dim::AmountOfMoney => dims::amount_of_money::rules().iter().collect(),
         Dim::CreditCardNumber => dims::credit_card::rules().iter().collect(),
+        Dim::Distance => dims::distance::rules().iter().collect(),
+        Dim::Duration => dims::duration::rules().iter().collect(),
         Dim::Email => dims::email::rules().iter().collect(),
         Dim::Numeral => dims::numeral::rules::rules().iter().collect(),
         Dim::PhoneNumber => dims::phone_number::rules().iter().collect(),
+        Dim::Temperature => dims::temperature::rules().iter().collect(),
         Dim::Url => dims::url::rules().iter().collect(),
+        Dim::Volume => dims::volume::rules().iter().collect(),
         _ => Vec::new(),
     }
 }
 
 fn en_lang_rules(dim: Dim) -> Vec<&'static Rule> {
     match dim {
+        Dim::AmountOfMoney => dims::amount_of_money::en_rules().iter().collect(),
+        Dim::Distance => dims::distance::en_rules().iter().collect(),
+        Dim::Duration => dims::duration::en_rules().iter().collect(),
         Dim::Email => dims::email::en_rules().iter().collect(),
         Dim::Numeral => dims::numeral::en::rules().iter().collect(),
+        Dim::Ordinal => dims::ordinal::en_rules().iter().collect(),
+        Dim::Quantity => dims::quantity::en_rules().iter().collect(),
+        Dim::Temperature => dims::temperature::en_rules().iter().collect(),
+        Dim::TimeGrain => dims::time_grain::en_rules().iter().collect(),
+        Dim::Volume => dims::volume::en_rules().iter().collect(),
         _ => Vec::new(),
     }
 }
@@ -59,8 +72,11 @@ fn lang_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {
     }
 }
 
-fn locale_rules(_lang: Lang, _region: Region, _dim: Dim) -> Vec<&'static Rule> {
-    Vec::new()
+fn locale_rules(lang: Lang, region: Region, dim: Dim) -> Vec<&'static Rule> {
+    match (lang, dim) {
+        (Lang::EN, Dim::AmountOfMoney) => dims::amount_of_money::en_region_rules(region).iter().collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn default_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {

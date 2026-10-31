@@ -104,3 +104,29 @@ impl Grain {
         }
     }
 }
+
+// ----- EN rules (`Duckling.TimeGrain.EN.Rules`) -------------------------------------------
+
+use crate::types::{regex, rule, Rule, Token};
+use once_cell::sync::Lazy;
+
+static EN_RULES: Lazy<Vec<Rule>> = Lazy::new(|| {
+    let grains: [(&str, &str, Grain); 8] = [
+        ("second (grain) ", "sec(ond)?s?", Grain::Second),
+        ("minute (grain)", "m(in(ute)?s?)?", Grain::Minute),
+        ("hour (grain)", "h(((ou)?rs?)|r)?", Grain::Hour),
+        ("day (grain)", "days?", Grain::Day),
+        ("week (grain)", "weeks?", Grain::Week),
+        ("month (grain)", "months?", Grain::Month),
+        ("quarter (grain)", "(quarter|qtr)s?", Grain::Quarter),
+        ("year (grain)", "y(ea)?rs?", Grain::Year),
+    ];
+    grains
+        .into_iter()
+        .map(|(name, re, g)| rule(name, vec![regex(re)], move |_| Some(Token::TimeGrain(g))))
+        .collect()
+});
+
+pub fn en_rules() -> &'static [Rule] {
+    &EN_RULES
+}
