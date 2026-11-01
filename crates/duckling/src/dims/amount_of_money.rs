@@ -405,7 +405,14 @@ fn intersect_cents(name: &str, pattern: Vec<crate::types::PatternItem>, cents_id
         let fd = aom(ts.first()?)?.clone();
         let c = match ts.get(cents_idx)? {
             Token::AmountOfMoney(d) => d.value?,
-            Token::Numeral(n) => n.value,
+            // Bare numerals after an amount are cents (`$20 43` → $20.43). A
+            // second dollar amount (`two $ 500`, `a $ 100`) is not (#268).
+            Token::Numeral(n) => {
+                if !(0.0..100.0).contains(&n.value) {
+                    return None;
+                }
+                n.value
+            }
             _ => return None,
         };
         tok(with_cents(c, fd))

@@ -219,6 +219,23 @@ fn rule_last_cycle_of_time() -> Rule {
     )
 }
 
+fn rule_last_duration_of_time() -> Rule {
+    rule(
+        "last <duration> of <time>",
+        vec![regex("last"), dimension(Dim::Duration), regex("of|in"), dimension(Dim::Time)],
+        |ts| {
+            let dd = dur(ts[1])?;
+            let base = td(ts[3])?;
+            if dd.value <= 0 {
+                return None;
+            }
+            let last = cycle_last_of(dd.grain, base);
+            let start = cycle_nth_after(false, dd.grain, 1 - dd.value, &last);
+            ttd(interval(Closed, &start, &last))
+        },
+    )
+}
+
 fn rule_last_night() -> Rule {
     rule("last night", vec![regex("(late )?last night")], |ts| {
         let m = to_lower(&rx(ts[0], 0)?);
@@ -1117,6 +1134,31 @@ fn rule_end_or_beginning_of_month() -> Rule {
     )
 }
 
+fn rule_before_end_of_month() -> Rule {
+    rule(
+        "before the end of the month",
+        vec![regex("(anytime |sometimes? )?(before|(un)?til(l)?|through|up to) (the )?end of (the )?month")],
+        |_| {
+            let end = cycle_last_of(G::Day, &cycle_nth(G::Month, 0));
+            tt(with_direction(IntervalDirection::Before, not_latent(end)))
+        },
+    )
+}
+
+fn rule_before_end_of_named_month() -> Rule {
+    rule(
+        "before the end of <named-month>",
+        vec![
+            regex("(anytime |sometimes? )?(before|(un)?til(l)?|through|up to) (the )?end of"),
+            pred(is_a_month),
+        ],
+        |ts| {
+            let end = cycle_last_of(G::Day, td(ts[1])?);
+            tt(with_direction(IntervalDirection::Before, not_latent(end)))
+        },
+    )
+}
+
 fn rule_end_of_month() -> Rule {
     rule("end of month", vec![regex("(by (the )?|(at )?the )?(EOM|end of (the )?month)")], |ts| {
         let m = to_lower(&rx(ts[0], 0)?);
@@ -1507,6 +1549,26 @@ fn rule_duration_after_before_time() -> Rule {
     )
 }
 
+fn rule_duration_from_now_at_tod() -> Rule {
+    rule(
+        "<duration> from now at|after <time-of-day>",
+        vec![
+            dimension(Dim::Duration),
+            regex("from now (at|after)"),
+            pred(is_a_time_of_day),
+        ],
+        |ts| {
+            let dd = dur(ts[0])?;
+            let tod = td(ts[2])?;
+            let day = duration_after(dd, &today());
+            match to_lower(&rx(ts[1], 0)?).as_str() {
+                "after" => ttd(intersect(&day, &with_direction(IntervalDirection::After, not_latent(tod.clone())))),
+                _ => ttd(intersect(&day, tod)),
+            }
+        },
+    )
+}
+
 fn rule_interval_for_duration_from() -> Rule {
     rule(
         "for <duration> from <time>",
@@ -1644,6 +1706,7 @@ pub fn build_rules() -> Vec<Rule> {
         rule_ordinal_dow_of_time(),
         rule_last_dow_of_time(),
         rule_last_cycle_of_time(),
+        rule_last_duration_of_time(),
         rule_last_night(),
         rule_last_weekend_of_month(),
         rule_nth_time_of_time(),
@@ -1747,6 +1810,7 @@ pub fn build_rules() -> Vec<Rule> {
         rule_day_in_duration(),
         rule_in_duration_at_time(),
         rule_duration_after_before_time(),
+        rule_duration_from_now_at_tod(),
         rule_interval_for_duration_from(),
         rule_interval_from_time_for_duration(),
         rule_interval_time_for_duration(),
@@ -1761,6 +1825,8 @@ pub fn build_rules() -> Vec<Rule> {
         rule_now(),
         rule_asap(),
         rule_season(),
+        rule_before_end_of_month(),
+        rule_before_end_of_named_month(),
         rule_end_of_month(),
         rule_beginning_of_month(),
         rule_end_of_year(),

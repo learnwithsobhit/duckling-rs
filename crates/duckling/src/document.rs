@@ -57,7 +57,14 @@ impl Document {
             first_non_adjacent[i] = best;
         }
         let prefilter = PrefilterHay::new(text);
-        Document { raw: text.to_string(), chars, char_to_byte, byte_to_char, first_non_adjacent, prefilter }
+        Document {
+            raw: text.to_string(),
+            chars,
+            char_to_byte,
+            byte_to_char,
+            first_non_adjacent,
+            prefilter,
+        }
     }
 
     pub fn prefilter(&self) -> &PrefilterHay {
@@ -120,6 +127,7 @@ impl Document {
     pub fn is_range_valid(&self, lang: Lang, start: usize, end: usize) -> bool {
         match lang {
             Lang::AR => self.ar_is_range_valid(start, end),
+            Lang::KA => self.ka_is_range_valid(start, end),
             Lang::ZH => self.zh_is_range_valid(start, end),
             _ => self.default_is_range_valid(start, end),
         }
@@ -135,6 +143,19 @@ impl Document {
         }
         (start == 0 || is_different(self.chars[start - 1], self.chars[start]))
             && (end == n || is_different(self.chars[end - 1], self.chars[end]))
+    }
+
+    /// Like `defaultIsRangeValid`, but Georgian letters count as `Alpha`.
+    ///
+    /// GHC `isLower`/`isUpper` do not treat Mkhedruli as cased, so each letter is
+    /// `Self c` and every intra-word span is a valid range (#439).
+    fn ka_is_range_valid(&self, start: usize, end: usize) -> bool {
+        let n = self.len();
+        if start >= n || end > n {
+            return start == 0 && end == 0 && n == 0;
+        }
+        (start == 0 || ka_is_different(self.chars[start - 1], self.chars[start]))
+            && (end == n || ka_is_different(self.chars[end - 1], self.chars[end]))
     }
 
     fn zh_is_range_valid(&self, start: usize, end: usize) -> bool {
@@ -212,6 +233,25 @@ fn char_class(c: char) -> CharClass {
 
 fn is_different(a: char, b: char) -> bool {
     char_class(a) != char_class(b)
+}
+
+/// Asomtavruli, Mkhedruli, Nuskhuri, and Mtavruli.
+fn is_georgian_letter(c: char) -> bool {
+    matches!(c, '\u{10A0}'..='\u{10FF}' | '\u{2D00}'..='\u{2D2F}' | '\u{1C90}'..='\u{1CBF}')
+}
+
+fn ka_char_class(c: char) -> CharClass {
+    if hs_is_lower(c) || hs_is_upper(c) || is_georgian_letter(c) {
+        CharClass::Alpha
+    } else if hs_is_digit(c) {
+        CharClass::Digit
+    } else {
+        CharClass::Self_(c)
+    }
+}
+
+fn ka_is_different(a: char, b: char) -> bool {
+    ka_char_class(a) != ka_char_class(b)
 }
 
 const ARABIC: &[char] = &[
@@ -295,5 +335,15 @@ mod tests {
         assert!(!d.is_range_valid(Lang::EN, 0, 2)); // splits "abc"
         assert!(d.is_range_valid(Lang::EN, 0, 3));
         assert!(d.is_range_valid(Lang::EN, 4, 6));
+    }
+
+    #[test]
+    fn georgian_numeral_is_not_a_substring() {
+        // "პათიზ" contains "ათი" (10) as a substring; #439.
+        let d = Document::new("პათიზ");
+        assert!(!d.is_range_valid(Lang::KA, 1, 4));
+        assert!(d.is_range_valid(Lang::KA, 0, 5));
+        let ten = Document::new("ათი");
+        assert!(ten.is_range_valid(Lang::KA, 0, 3));
     }
 }

@@ -17,7 +17,28 @@ Response bodies are byte-identical to the Haskell example server (verified on ~1
 
 ## Parser bug fixes
 
-None yet (Phase 7).
+Each row is an intentional change from Haskell. The new behaviour is locked by
+`crates/duckling/tests/phase7.rs`.
+
+| # | Issue | Before (Haskell) | After (Rust) | Notes |
+|---|-------|------------------|--------------|-------|
+| P1 | [#439](https://github.com/facebook/duckling/issues/439) Georgian numerals | `ათი` matches inside `პათიზ` because GHC `isLower`/`isUpper` do not treat Mkhedruli as letters | Intra-word Georgian spans are rejected (`ka_is_range_valid`) | [#541](https://github.com/facebook/duckling/issues/541) is an upstream GHC ≥8.8 test flake, not a Rust bug |
+| P2 | [#481](https://github.com/facebook/duckling/issues/481) large DE numbers | Compound words such as `fünfzigtausend` failed in some deployments | `rule_all_numeral_words` + `parse_numeral` accept the official compound spelling | Covered by Phase 7 tests; no fixture change |
+| P3 | [#456](https://github.com/facebook/duckling/issues/456) "this week" | `this week` is Monday of the current week at Week grain | Unchanged | Official EN Time corpus requires Week grain Monday; changing it would break `monday of this week` / `beginning of this week` |
+| P4 | [#440](https://github.com/facebook/duckling/issues/440) "now" | `three days from now at 6pm` does not intersect the time of day (`now` is NoGrain) | New EN rule `<duration> from now at|after <time-of-day>` shifts from today, then intersects | Standalone `a day from now` stays Haskell-identical |
+| P5 | [#275](https://github.com/facebook/duckling/issues/275) end of month | `before the end of the month` uses day 21 (start of the "end of month" interval) | Dedicated rules bound on the last day of the month | `end of the month` as a standalone interval is unchanged |
+| P6 | [#268](https://github.com/facebook/duckling/issues/268) `<number> $ <number>` | `two $ 500` → $7 (`500` treated as cents) | Bare numerals after an amount are cents only when `0 ≤ n < 100` | `$20 43` → $20.43 still holds |
+| P7 | [#250](https://github.com/facebook/duckling/issues/250) last four months of 2016 | `last four months` resolved against the current year | `last <duration> of <time>` intersects the given year | New EN Time rule |
+| P8 | [#174](https://github.com/facebook/duckling/issues/174) weekday/hour ranges | Overlapping parses of `Mon-Fri 7am-7pm CST, Sat-Sun 8am-6pm CST` | Unchanged | Ranking/overlap; no safe local fix without regressing other interval corpora |
+| P9 | [#13](https://github.com/facebook/duckling/issues/13) second Sunday vs Thursday | `the second sunday of October last year` resolves inconsistently | Unchanged | Same ranking/intersect family as P8 |
+| P10 | [#131](https://github.com/facebook/duckling/issues/131) Arabic intra-word matches | `أحد` (Sunday) matched inside `وأحدث` | Arabic letters are `Alpha` plus proclitic rules; intra-word Sunday is rejected | Already implied by the AR range-valid port; locked by test |
+
+## Port notes (not parser divergences)
+
+| # | Item | Notes |
+|---|------|-------|
+| N1 | EN empty-targets fixture | `EN_XX` record for `the day after tomorrow 5pm` has empty `targets` and is skipped by parity (`in_scope` requires non-empty targets). Do not edit the gold file. |
+| N2 | CA_XX classifier tables | Trainer verify is exact for 50/51 locales. `CA_XX` differs because CA Time regexes were tightened to avoid Haskell empty-match loops; not a trainer bug. |
 
 ## Fixture allowlist
 
