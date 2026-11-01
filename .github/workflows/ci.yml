@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test + parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Library and crate tests
+        run: cargo test --release --workspace --exclude duckling-wasm -- --nocapture
+      - name: Fixture parity
+        run: cargo test --release -p duckling --test parity -- --nocapture
+
+  lint:
+    name: clippy + fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings -A non_snake_case
+
+  wasm:
+    name: wasm32 build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build duckling-wasm (default lang-en)
+        run: cargo build --release -p duckling-wasm --target wasm32-unknown-unknown
+
+  fixtures:
+    name: fixture-change guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require DIVERGENCES.md for fixture edits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          tools/ci/check_fixtures.sh "$BASE" "${{ github.sha }}"
+
+  bench:
+    name: expensive bench smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Criterion expensive (short)
+        run: >
+          cargo bench -p duckling --bench expensive --
+          --sample-size 10 --warm-up-time 1 --measurement-time 2
+      - name: Upload Criterion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-expensive
+          path: target/criterion
+          if-no-files-found: ignore

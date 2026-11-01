@@ -18,3 +18,8 @@ Response bodies are byte-identical to the Haskell example server (verified on ~1
 ## Parser bug fixes
 
 None yet (Phase 7).
+
+## Fixture allowlist
+
+CI fails if any `fixtures/*.jsonl` file changes unless this document names that file
+(basename or path). Phase 7 bug fixes list the regenerated fixtures here.
