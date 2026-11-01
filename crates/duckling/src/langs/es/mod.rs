@@ -10,7 +10,8 @@ pub mod numeral;
 pub mod ordinal;
 pub mod quantity;
 pub mod temperature;
-pub mod time_grain;
+pub mod time;
+mod time_grain;
 pub mod volume;
 
 /// Dimensions whose rules for this language (all locales) are fully ported and fixture-verified.
@@ -24,6 +25,11 @@ pub const PORTED: &[Dim] = &[
     Dim::Volume,
     Dim::Quantity,
     Dim::AmountOfMoney,
+    Dim::Time,
+    Dim::Email,
+    Dim::Url,
+    Dim::PhoneNumber,
+    Dim::CreditCardNumber,
 ];
 
 /// `langRules`.
@@ -36,6 +42,7 @@ pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Ordinal => ordinal::rules().iter().collect(),
         Dim::Quantity => quantity::rules().iter().collect(),
         Dim::Temperature => temperature::rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
         Dim::TimeGrain => time_grain::rules().iter().collect(),
         Dim::Volume => volume::rules().iter().collect(),
         _ => Vec::new(),
