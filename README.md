@@ -27,6 +27,7 @@ Not on crates.io yet. Depend on this repo by path or git.
 | Dimension | Example input | Notes |
 |---|---|---|
 | `time` | `tomorrow at 5pm`, `now`, `this week` | Needs a reference time and timezone |
+| `timezone` | `now in mumbai` | Opt-in only (`location_tz=true`); not in `GET /targets` |
 | `duration` | `two hours`, `3 days` | |
 | `numeral` | `twenty-one`, `3.5` | |
 | `ordinal` | `first`, `22nd` | |
@@ -64,9 +65,9 @@ curl -s -XPOST http://127.0.0.1:8000/parse \
 curl -s -XPOST http://127.0.0.1:8000/parse \
   --data 'locale=en_IN&text=now&tz=Asia/Kolkata'
 
-# Current instant printed in a named city (opt-in; off by default)
+# Current time in a named city (opt-in; off by default)
 curl -s -XPOST http://127.0.0.1:8000/parse \
-  --data 'locale=en_US&text=now in delhi&tz=America/Los_Angeles&dims=["time"]&location_tz=true'
+  --data 'locale=en_US&text=now in mumbai&dims=["time"]&location_tz=true'
 ```
 
 Form fields (same as upstream):
@@ -76,13 +77,54 @@ Form fields (same as upstream):
 | `text` | required | Input to parse |
 | `locale` | `en` | Language + region (`en_US`, `en_IN`, `en_GB`, `fr_XX`, …) |
 | `lang` | from `locale`, else `EN` | Language only |
-| `tz` | `America/Los_Angeles` | Olson zone for the **output clock** |
+| `tz` | `America/Los_Angeles` | Olson zone for the **request clock** (`now`, `today`, printed offset) |
 | `reftime` | server `now` | Unix milliseconds; the “now” the parser resolves against |
 | `dims` | all | JSON array, e.g. `["time"]` |
 | `latent` | `false` | Also return weak parses (`7` as an hour) |
-| `location_tz` | `false` | Opt-in: resolve `now/today/5pm in <city>` in that city’s zone |
+| `location_tz` | `false` | Opt-in: resolve `now/today/5pm in <city>` in that city’s zone (English) |
 
-`locale` chooses **rules** (date order, holidays, currency). `tz` chooses **which clock** to print. They are independent: `locale=en_IN&tz=Asia/Kolkata` is Indian English in IST; `locale=en_US&tz=Asia/Kolkata` is US English rules on an IST clock.
+`locale` chooses **rules** (date order, holidays, currency). `tz` chooses **which clock** the parser treats as “here”. They are independent: `locale=en_IN&tz=Asia/Kolkata` is Indian English in IST; `locale=en_US&tz=Asia/Kolkata` is US English rules on an IST clock.
+
+### Location timezone (`location_tz=true`)
+
+Off by default so `/parse` and Haskell fixtures stay unchanged. When set, English phrases that name a city on the allowlist are resolved **in that city’s zone**, using the same instant as `reftime` (server `now` if omitted). You do **not** set `tz` to the city; `tz` is still the request’s own clock (default `America/Los_Angeles`). DST comes from the server’s Olson `TZif` files.
+
+```bash
+curl -s -XPOST http://127.0.0.1:8000/parse \
+  --data 'text=now in mumbai&dims=["time"]&location_tz=true'
+```
+
+```json
+[
+  {
+    "dim": "time",
+    "body": "now in mumbai",
+    "value": {
+      "city": "Mumbai",
+      "timezone": "Asia/Kolkata",
+      "value": "2026-11-01T21:48:28.000+05:30",
+      "grain": "second",
+      "type": "value"
+    }
+  },
+  {
+    "dim": "timezone",
+    "body": "now in mumbai",
+    "value": { "city": "Mumbai", "timezone": "Asia/Kolkata", "offset": "+05:30" }
+  }
+]
+```
+
+| Input | What you get |
+|---|---|
+| `now in mumbai` / `time in delhi` | Same instant as request `now`, printed with the city offset |
+| `today in delhi` / `tomorrow in delhi` | That calendar day **in the city** (date-line included) |
+| `5pm in london` / `tomorrow at 5pm in sydney` | That civil time in the city, not “5pm here, then converted” |
+| `now in london` | Two hits: `London, UK` then `London, Ontario` |
+| `now in london, ontario` | Ontario only |
+| `now` / `5pm PST` / `I live in london` | Unchanged; no city timezone entity |
+
+Cities are a closed English allowlist (Delhi, Mumbai, London, Sydney, …), not live geocoding. Unknown places leave the normal time parse. `GET /targets` does not list `timezone`. WASM accepts the same `location_tz` field on the JSON request.
 
 ## Use as a crate
 
@@ -152,6 +194,11 @@ d.parse(JSON.stringify({
   text: "tomorrow at 5pm",
   dims: ["time"],
   tz: "America/Los_Angeles",
+}));
+d.parse(JSON.stringify({
+  text: "now in mumbai",
+  dims: ["time"],
+  location_tz: true,
 }));
 ```
 
