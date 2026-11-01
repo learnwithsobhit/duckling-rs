@@ -119,6 +119,12 @@ impl Document {
     }
 
     fn default_is_range_valid(&self, start: usize, end: usize) -> bool {
+        // Empty regex matches can land at `start == len` (e.g. JA `(\(|（)?`).
+        // Haskell `doc ! start` is undefined there; treat those ranges as invalid.
+        // Empty document (`start == end == 0 == len`) stays valid.
+        if start >= self.len() {
+            return start == 0 && end == 0;
+        }
         (start == 0 || is_different(self.chars[start - 1], self.chars[start]))
             && (end == self.len() || is_different(self.chars[end - 1], self.chars[end]))
     }
