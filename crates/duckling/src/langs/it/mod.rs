@@ -1,8 +1,10 @@
 //! IT: port of `Duckling.*.IT.*` rules (`Duckling.Rules.IT`).
 
+mod holidays;
 mod measures;
 mod numeral;
 mod simple;
+mod time;
 
 use crate::locale::Region;
 use crate::types::{Dim, Rule};
@@ -18,6 +20,10 @@ pub const PORTED: &[Dim] = &[
     Dim::Temperature,
     Dim::Volume,
     Dim::AmountOfMoney,
+    Dim::Time,
+    Dim::Url,
+    Dim::PhoneNumber,
+    Dim::CreditCardNumber,
 ];
 
 /// `langRules`.
@@ -30,6 +36,7 @@ pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Numeral => numeral::rules().iter().collect(),
         Dim::Ordinal => simple::ordinal_rules().iter().collect(),
         Dim::Temperature => measures::temperature_rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
         Dim::TimeGrain => simple::time_grain_rules().iter().collect(),
         Dim::Volume => measures::volume_rules().iter().collect(),
         _ => Vec::new(),
