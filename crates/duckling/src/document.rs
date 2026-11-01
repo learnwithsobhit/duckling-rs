@@ -122,8 +122,9 @@ impl Document {
         let n = self.len();
         // Empty match at EOF (`start == n`) would index `chars[start]` out of bounds.
         // Haskell PCRE `matchAll` does not emit a match starting at `length`; reject it.
+        // Empty document (`start == end == 0 == n`) stays valid.
         if start >= n || end > n {
-            return false;
+            return start == 0 && end == 0 && n == 0;
         }
         (start == 0 || is_different(self.chars[start - 1], self.chars[start]))
             && (end == n || is_different(self.chars[end - 1], self.chars[end]))
