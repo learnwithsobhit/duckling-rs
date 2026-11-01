@@ -1,18 +1,46 @@
-//! IT: port of `Duckling.*.IT.*` rules.
-//!
-//! Status: not ported yet. Fill in `lang_rules` (Duckling.Rules.IT.langRules), `locale_rules`
-//! (localeRules), `default_rules` (defaultRules) and list fully-ported dimensions in `PORTED`.
+//! IT: port of `Duckling.*.IT.*` rules (`Duckling.Rules.IT`).
+
+mod holidays;
+mod measures;
+mod numeral;
+mod simple;
+mod time;
 
 use crate::locale::Region;
 use crate::types::{Dim, Rule};
 
 /// Dimensions whose rules for this language (all locales) are fully ported and fixture-verified.
-pub const PORTED: &[Dim] = &[];
+pub const PORTED: &[Dim] = &[
+    Dim::Email,
+    Dim::Numeral,
+    Dim::Ordinal,
+    Dim::TimeGrain,
+    Dim::Duration,
+    Dim::Distance,
+    Dim::Temperature,
+    Dim::Volume,
+    Dim::AmountOfMoney,
+    Dim::Time,
+    Dim::Url,
+    Dim::PhoneNumber,
+    Dim::CreditCardNumber,
+];
 
 /// `langRules`.
-#[allow(unused_variables)]
 pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
-    Vec::new()
+    match dim {
+        Dim::AmountOfMoney => measures::amount_of_money_rules().iter().collect(),
+        Dim::Distance => measures::distance_rules().iter().collect(),
+        Dim::Duration => simple::duration_rules().iter().collect(),
+        Dim::Email => measures::email_rules().iter().collect(),
+        Dim::Numeral => numeral::rules().iter().collect(),
+        Dim::Ordinal => simple::ordinal_rules().iter().collect(),
+        Dim::Temperature => measures::temperature_rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
+        Dim::TimeGrain => simple::time_grain_rules().iter().collect(),
+        Dim::Volume => measures::volume_rules().iter().collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// `localeRules`.
