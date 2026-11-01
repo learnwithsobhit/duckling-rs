@@ -7,12 +7,15 @@ pub mod dims;
 pub mod document;
 pub mod engine;
 pub mod json;
+pub mod lang_dims;
 pub mod locale;
 pub mod ported;
 pub mod ranking;
 pub mod regex_tr;
 pub mod rules;
+pub mod service;
 pub mod time_zone;
+pub mod tzif;
 pub mod types;
 
 pub use api::{all_dimensions, analyze, format_token, parse, Entity};

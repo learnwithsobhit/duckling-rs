@@ -86,6 +86,21 @@ pub fn all_dimensions(lang: Lang) -> Vec<Dim> {
     v.into_iter().collect()
 }
 
+/// `supportedDimensions` for one language: `Common.allDimensions ++ <LANG>.allDimensions`, in
+/// upstream order and without de-duplication (so e.g. `number` appears twice for EN).
+pub fn supported_dimensions(lang: Lang) -> Vec<Dim> {
+    let mut v = vec![
+        Dim::AmountOfMoney,
+        Dim::CreditCardNumber,
+        Dim::Email,
+        Dim::Numeral,
+        Dim::PhoneNumber,
+        Dim::Url,
+    ];
+    v.extend(crate::rules::lang_dimensions(lang));
+    v
+}
+
 #[allow(dead_code)]
 fn _link(_: Locale) {
     let _ = dims::util::to_lower;

@@ -960,11 +960,32 @@ fn open_interval(series: &TimeZoneSeries, d: IntervalDirection, t: &TimeObject) 
     }
 }
 
+thread_local! {
+    /// Set when a Time node needed the reference time while probing was enabled (see
+    /// [`probe_reference_time_use`]).
+    static REFERENCE_TIME_USED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Runs `f` and reports whether resolving any Time node consumed the reference time. Upstream
+/// evaluates the reference time lazily, so an invalid one only fails requests that resolve a
+/// Time entity; the HTTP layer uses this to reproduce that.
+pub fn probe_reference_time_use<R>(f: impl FnOnce() -> R) -> (R, bool) {
+    REFERENCE_TIME_USED.with(|c| c.set(Some(false)));
+    let r = f();
+    let used = REFERENCE_TIME_USED.with(|c| c.replace(None)).unwrap_or(false);
+    (r, used)
+}
+
 impl TimeData {
     pub fn resolve(&self, ctx: &Context, opts: &Options) -> Option<(Json, bool)> {
         if !opts.with_latent && self.latent {
             return None;
         }
+        REFERENCE_TIME_USED.with(|c| {
+            if c.get().is_some() {
+                c.set(Some(true));
+            }
+        });
         let utc = ctx.reference_time.utc;
         let series = Arc::new(ctx.reference_time.series.clone());
         let ref_time = TimeObject { start: utc, grain: Grain::Second, end: None };

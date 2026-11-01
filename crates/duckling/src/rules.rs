@@ -6,22 +6,7 @@ use crate::dims;
 use crate::locale::{Lang, Locale, Region};
 use crate::types::{Dim, Rule};
 
-/// Dimensions specific to a language (`Duckling.Dimensions.<LANG>.allDimensions`).
-pub fn lang_dimensions(lang: Lang) -> Vec<Dim> {
-    match lang {
-        Lang::EN => vec![
-            Dim::Distance,
-            Dim::Duration,
-            Dim::Numeral,
-            Dim::Ordinal,
-            Dim::Quantity,
-            Dim::Temperature,
-            Dim::Time,
-            Dim::Volume,
-        ],
-        _ => Vec::new(),
-    }
-}
+pub use crate::lang_dims::lang_dimensions;
 
 /// `explicitDimensions`: targets augmented with all dependent dimensions.
 pub fn explicit_dimensions(targets: &HashSet<Dim>) -> BTreeSet<Dim> {
