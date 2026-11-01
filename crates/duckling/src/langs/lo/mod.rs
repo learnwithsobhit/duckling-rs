@@ -1,21 +1,24 @@
-//! LO: port of `Duckling.*.LO.*` rules.
+//! LO: port of `Duckling.*.LO.*` rules (`Duckling.Rules.LO`).
 //!
-//! Status: not ported yet. Fill in `lang_rules` (Duckling.Rules.LO.langRules), `locale_rules`
-//! (localeRules), `default_rules` (defaultRules) and list fully-ported dimensions in `PORTED`.
+//! `defaultRules = langRules`; no locale-specific rules. Only Numeral is defined.
 
 use crate::locale::Region;
 use crate::types::{Dim, Rule};
 
+mod numeral;
+
 /// Dimensions whose rules for this language (all locales) are fully ported and fixture-verified.
-pub const PORTED: &[Dim] = &[];
+pub const PORTED: &[Dim] = &[Dim::Numeral];
 
 /// `langRules`.
-#[allow(unused_variables)]
 pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
-    Vec::new()
+    match dim {
+        Dim::Numeral => numeral::rules().iter().collect(),
+        _ => Vec::new(),
+    }
 }
 
-/// `localeRules`.
+/// `localeRules` (LO has none).
 #[allow(unused_variables)]
 pub fn locale_rules(region: Region, dim: Dim) -> Vec<&'static Rule> {
     Vec::new()
