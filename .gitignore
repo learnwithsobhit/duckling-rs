@@ -1,2 +1,3 @@
 target/
 fixtures/raw.jsonl
+crates/duckling-wasm/pkg/
