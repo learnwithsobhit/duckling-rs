@@ -3,9 +3,11 @@
 mod distance;
 mod duration;
 mod email;
+mod holidays;
 mod num_parser;
 mod numeral;
 mod ordinal;
+mod time;
 mod time_grain;
 mod volume;
 
@@ -21,6 +23,10 @@ pub const PORTED: &[Dim] = &[
     Dim::Duration,
     Dim::Distance,
     Dim::Volume,
+    Dim::Time,
+    Dim::Url,
+    Dim::PhoneNumber,
+    Dim::CreditCardNumber,
 ];
 
 /// `langRules`.
@@ -31,6 +37,7 @@ pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Email => email::rules().iter().collect(),
         Dim::Numeral => numeral::rules().iter().collect(),
         Dim::Ordinal => ordinal::rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
         Dim::TimeGrain => time_grain::rules().iter().collect(),
         Dim::Volume => volume::rules().iter().collect(),
         _ => Vec::new(),
