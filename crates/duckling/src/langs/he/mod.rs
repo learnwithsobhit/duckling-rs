@@ -1,21 +1,39 @@
-//! HE: port of `Duckling.*.HE.*` rules.
-//!
-//! Status: not ported yet. Fill in `lang_rules` (Duckling.Rules.HE.langRules), `locale_rules`
-//! (localeRules), `default_rules` (defaultRules) and list fully-ported dimensions in `PORTED`.
+//! HE: port of `Duckling.*.HE.*` rules (`Duckling.Rules.HE`).
+
+mod amount_of_money;
+mod duration;
+mod numeral;
+mod ordinal;
+mod time;
+mod time_grain;
 
 use crate::locale::Region;
 use crate::types::{Dim, Rule};
 
 /// Dimensions whose rules for this language (all locales) are fully ported and fixture-verified.
-pub const PORTED: &[Dim] = &[];
+pub const PORTED: &[Dim] = &[
+    Dim::Numeral,
+    Dim::Ordinal,
+    Dim::TimeGrain,
+    Dim::Duration,
+    Dim::AmountOfMoney,
+    Dim::Time,
+];
 
 /// `langRules`.
-#[allow(unused_variables)]
 pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
-    Vec::new()
+    match dim {
+        Dim::AmountOfMoney => amount_of_money::rules().iter().collect(),
+        Dim::Duration => duration::rules().iter().collect(),
+        Dim::Numeral => numeral::rules().iter().collect(),
+        Dim::Ordinal => ordinal::rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
+        Dim::TimeGrain => time_grain::rules().iter().collect(),
+        _ => Vec::new(),
+    }
 }
 
-/// `localeRules`.
+/// `localeRules` (HE has none).
 #[allow(unused_variables)]
 pub fn locale_rules(region: Region, dim: Dim) -> Vec<&'static Rule> {
     Vec::new()
