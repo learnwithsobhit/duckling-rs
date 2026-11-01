@@ -130,8 +130,14 @@ impl Document {
     }
 
     fn ar_is_range_valid(&self, start: usize, end: usize) -> bool {
-        let d = |i: usize| self.chars[i];
         let len = self.len();
+        // Empty-alternative regexes (e.g. AR money `فوق||…`) can yield a 0-width
+        // match at EOF (`start == end == len`). Haskell `doc ! start` would throw;
+        // reject instead of indexing `chars[len]`.
+        if start >= len || end > len {
+            return false;
+        }
+        let d = |i: usize| self.chars[i];
         let diff = |a: usize, b: usize| ar_is_different(d(a), d(b));
         ((start == 0 || diff(start - 1, start)) && (end == len || diff(end - 1, end)))
             // Is Arabic proclitic?
@@ -148,7 +154,7 @@ impl Document {
             // Is Arabic enclitic?
             || (start + 2 == end
                 && is_arabic_enclitic(d(start), d(end - 1))
-                && (end == len || diff(end, end + 1)))
+                && (end == len || (end + 1 < len && diff(end, end + 1))))
             // Is followed by enclitic
             || ((start == 0 || diff(start - 1, start))
                 && (end + 2 <= len && is_arabic_enclitic(d(end), d(end + 1))))

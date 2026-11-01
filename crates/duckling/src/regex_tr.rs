@@ -224,10 +224,73 @@ fn find_posix_end(p: &[char], start: usize) -> Option<usize> {
     None
 }
 
+/// Split `pat` on top-level `|` (respecting `\`, `[]`, `()`).
+fn split_top_level_alts(pat: &str) -> Vec<String> {
+    let p: Vec<char> = pat.chars().collect();
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut i = 0;
+    let mut depth = 0i32;
+    let mut in_class = false;
+    while i < p.len() {
+        let c = p[i];
+        if c == '\\' && i + 1 < p.len() {
+            cur.push(c);
+            cur.push(p[i + 1]);
+            i += 2;
+            continue;
+        }
+        if in_class {
+            cur.push(c);
+            if c == ']' {
+                in_class = false;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            '[' => {
+                in_class = true;
+                cur.push(c);
+            }
+            '(' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(c);
+            }
+            '|' if depth == 0 => {
+                out.push(std::mem::take(&mut cur));
+            }
+            _ => cur.push(c),
+        }
+        i += 1;
+    }
+    out.push(cur);
+    out
+}
+
+/// Drop empty top-level alternatives (`فوق||foo` → `فوق|foo`) so a
+/// `PCRE_NOTEMPTY|PCRE_ANCHORED` retry can see the next alternative.
+fn strip_empty_top_alts(pat: &str) -> String {
+    let parts = split_top_level_alts(pat);
+    let kept: Vec<String> = parts.into_iter().filter(|p| !p.is_empty()).collect();
+    if kept.is_empty() {
+        pat.to_string()
+    } else {
+        kept.join("|")
+    }
+}
+
 /// A compiled rule pattern.
 #[derive(Debug)]
 pub struct Re {
     re: Regex,
+    /// Pattern with empty top-level `|` alternatives removed; used for the
+    /// `wrapMatchAll` not-empty + anchored retry after a zero-width match.
+    re_notempty: Regex,
     source: String,
     n_groups: usize,
 }
@@ -242,8 +305,14 @@ impl Re {
         let re = Regex::new(&translated).unwrap_or_else(|e| {
             panic!("failed to compile pattern {:?} (translated {:?}): {}", pattern, translated, e)
         });
+        let stripped = strip_empty_top_alts(pattern);
+        let ne_src = format!("(?i){}", translate(&stripped));
+        let re_notempty = Regex::new(&ne_src).unwrap_or_else(|_| {
+            // Fall back to the original if stripping produced something illegal.
+            Regex::new(&translated).expect("original pattern compiled")
+        });
         let n_groups = re.captures_len() - 1;
-        Re { re, source: pattern.to_string(), n_groups }
+        Re { re, re_notempty, source: pattern.to_string(), n_groups }
     }
 
     pub fn source(&self) -> &str {
@@ -266,27 +335,49 @@ impl Re {
         }
     }
 
-    /// All non-overlapping matches (like `matchAll`).
+    /// `wrapMatchAll`: after a zero-width match, retry at the same offset with
+    /// `PCRE_NOTEMPTY|PCRE_ANCHORED`. If that fails, stop (do not walk the rest
+    /// of the subject one character at a time).
     pub fn match_all(&self, text: &str) -> Vec<Spans> {
         let mut res = Vec::new();
         let mut pos = 0usize;
+        let mut notempty_anchored = false;
         while pos <= text.len() {
-            match self.re.captures_from_pos(text, pos) {
-                Ok(Some(c)) => {
+            let caps = if notempty_anchored {
+                match self.re_notempty.captures_from_pos(text, pos) {
+                    Ok(Some(c)) => {
+                        let m = c.get(0).unwrap();
+                        if m.start() == pos && m.end() > pos {
+                            Some(c)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                match self.re.captures_from_pos(text, pos) {
+                    Ok(Some(c)) => Some(c),
+                    _ => None,
+                }
+            };
+            match caps {
+                Some(c) => {
                     let m = c.get(0).unwrap();
                     let (s, e) = (m.start(), m.end());
                     res.push(Self::spans(&c));
-                    if e == s {
-                        // Advance one character past an empty match.
-                        match text[e..].chars().next() {
-                            Some(ch) => pos = e + ch.len_utf8(),
-                            None => break,
+                    if s == e {
+                        if s == text.len() {
+                            break;
                         }
+                        notempty_anchored = true;
+                        pos = e;
                     } else {
+                        notempty_anchored = false;
                         pos = e;
                     }
                 }
-                _ => break,
+                None => break,
             }
         }
         res
