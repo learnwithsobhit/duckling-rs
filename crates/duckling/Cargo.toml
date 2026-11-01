@@ -60,11 +60,17 @@ lang-zh = []
 
 [dependencies]
 fancy-regex = "0.14"
+regex = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 unicode-general-category = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 once_cell = "1"
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+
+[[bench]]
+name = "expensive"
+harness = false

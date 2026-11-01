@@ -964,6 +964,27 @@ thread_local! {
     /// Set when a Time node needed the reference time while probing was enabled (see
     /// [`probe_reference_time_use`]).
     static REFERENCE_TIME_USED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+    static RESOLVE_TC: std::cell::RefCell<Option<TimeContext>> = const { std::cell::RefCell::new(None) };
+}
+
+fn time_context_from(ctx: &Context) -> TimeContext {
+    let utc = ctx.reference_time.utc;
+    let ref_time = TimeObject { start: utc, grain: Grain::Second, end: None };
+    TimeContext {
+        ref_time,
+        tz_series: Arc::new(ctx.reference_time.series.clone()),
+        max_time: time_plus(&ref_time, Grain::Year, 2000),
+        min_time: time_plus(&ref_time, Grain::Year, -2000),
+    }
+}
+
+/// Reuse one [`TimeContext`] for every Time resolve in a parse (same reference time).
+pub fn with_resolve_context<R>(ctx: &Context, f: impl FnOnce() -> R) -> R {
+    let tc = time_context_from(ctx);
+    RESOLVE_TC.with(|c| *c.borrow_mut() = Some(tc));
+    let r = f();
+    RESOLVE_TC.with(|c| *c.borrow_mut() = None);
+    r
 }
 
 /// Runs `f` and reports whether resolving any Time node consumed the reference time. Upstream
@@ -986,20 +1007,19 @@ impl TimeData {
                 c.set(Some(true));
             }
         });
-        let utc = ctx.reference_time.utc;
-        let series = Arc::new(ctx.reference_time.series.clone());
-        let ref_time = TimeObject { start: utc, grain: Grain::Second, end: None };
-        let tc = TimeContext {
-            ref_time,
-            tz_series: series.clone(),
-            max_time: time_plus(&ref_time, Grain::Year, 2000),
-            min_time: time_plus(&ref_time, Grain::Year, -2000),
+        let owned;
+        let tc = if let Some(cached) = RESOLVE_TC.with(|c| c.borrow().clone()) {
+            cached
+        } else {
+            owned = time_context_from(ctx);
+            owned
         };
-        let (past, future) = run_predicate(&self.time_pred)(&ref_time, &tc);
+        let series = tc.tz_series.clone();
+        let (past, future) = run_predicate(&self.time_pred)(&tc.ref_time, &tc);
         let value = match (future.get(0), future.get(1)) {
             (None, _) => past.head()?,
             (Some(ahead), Some(next_ahead))
-                if self.not_immediate && time_intersect(&ahead, &ref_time).is_some() =>
+                if self.not_immediate && time_intersect(&ahead, &tc.ref_time).is_some() =>
             {
                 next_ahead
             }

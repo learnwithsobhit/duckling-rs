@@ -5,6 +5,7 @@
 //! code point offsets and byte offsets.
 
 use crate::locale::Lang;
+use crate::regex_prefilter::PrefilterHay;
 use unicode_general_category::{get_general_category, GeneralCategory};
 
 #[derive(Debug, Clone)]
@@ -17,6 +18,7 @@ pub struct Document {
     byte_to_char: Vec<usize>,
     /// For index `i`: first index `j >= i` where `chars[j]` is not an adjacent separator.
     first_non_adjacent: Vec<usize>,
+    prefilter: PrefilterHay,
 }
 
 fn is_adjacent_separator(c: char) -> bool {
@@ -54,7 +56,12 @@ impl Document {
             }
             first_non_adjacent[i] = best;
         }
-        Document { raw: text.to_string(), chars, char_to_byte, byte_to_char, first_non_adjacent }
+        let prefilter = PrefilterHay::new(text);
+        Document { raw: text.to_string(), chars, char_to_byte, byte_to_char, first_non_adjacent, prefilter }
+    }
+
+    pub fn prefilter(&self) -> &PrefilterHay {
+        &self.prefilter
     }
 
     pub fn len(&self) -> usize {

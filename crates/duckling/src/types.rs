@@ -330,7 +330,7 @@ pub type Production = Box<dyn Fn(&[&Token]) -> Option<Token> + Send + Sync>;
 pub type Predicate = Box<dyn Fn(&Token) -> bool + Send + Sync>;
 
 pub enum PatternItem {
-    Regex(Re),
+    Regex(std::sync::Arc<Re>),
     Predicate(Predicate),
 }
 
@@ -348,7 +348,7 @@ impl std::fmt::Debug for Rule {
 
 /// `Duckling.Types.regex`.
 pub fn regex(pattern: &str) -> PatternItem {
-    PatternItem::Regex(Re::new(pattern))
+    PatternItem::Regex(crate::regex_tr::intern(pattern))
 }
 
 /// `Duckling.Types.dimension`.

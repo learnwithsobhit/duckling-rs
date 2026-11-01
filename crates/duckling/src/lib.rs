@@ -12,6 +12,7 @@ pub mod langs;
 pub mod locale;
 pub mod ported;
 pub mod ranking;
+pub mod regex_prefilter;
 pub mod regex_tr;
 pub mod rules;
 pub mod service;

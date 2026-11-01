@@ -6,7 +6,17 @@
 //! rewrite those escapes to explicit ASCII classes. We also reproduce PCRE's `$` (end of subject
 //! or before a final newline) and treat a `{` that does not start a quantifier as a literal.
 
-use fancy_regex::Regex;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use crate::regex_prefilter::{Prefilter, PrefilterHay};
+
+/// Intern compiled patterns so identical rule regexes share one engine and cache key.
+pub fn intern(pattern: &str) -> Arc<Re> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<Re>>>> = OnceLock::new();
+    let mut guard = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
+    guard.entry(pattern.to_string()).or_insert_with(|| Arc::new(Re::new(pattern))).clone()
+}
 
 const WORD: &str = "a-zA-Z0-9_";
 const SPACE: &str = " \\t\\n\\x0B\\f\\r";
@@ -57,6 +67,15 @@ fn class_escape_body(c: char) -> Option<&'static str> {
 
 /// Translate a PCRE pattern (as used by Duckling rules) into a `fancy-regex` pattern.
 pub fn translate(pattern: &str) -> String {
+    translate_impl(pattern, false)
+}
+
+/// Same rewrite, but `\b`/`$` stay in a form the DFA `regex` crate can compile.
+fn translate_rust(pattern: &str) -> String {
+    translate_impl(pattern, true)
+}
+
+fn translate_impl(pattern: &str, rust_regex: bool) -> String {
     let p: Vec<char> = pattern.chars().collect();
     let mut out = String::with_capacity(pattern.len() + 16);
     let mut i = 0;
@@ -77,6 +96,8 @@ pub fn translate(pattern: &str) -> String {
                     'W' => out.push_str(&format!("[^{}]", WORD)),
                     's' => out.push_str(&format!("[{}]", SPACE)),
                     'S' => out.push_str(&format!("[^{}]", SPACE)),
+                    'b' if rust_regex => out.push_str("(?-u:\\b)"),
+                    'B' if rust_regex => out.push_str("(?-u:\\B)"),
                     'b' => out.push_str(&ascii_boundary()),
                     'B' => out.push_str(&ascii_non_boundary()),
                     _ => {
@@ -88,6 +109,10 @@ pub fn translate(pattern: &str) -> String {
             }
             '[' => {
                 i = translate_class(&p, i, &mut out);
+            }
+            '$' if rust_regex => {
+                out.push('$');
+                i += 1;
             }
             '$' => {
                 out.push_str("(?=\\n?\\z)");
@@ -224,52 +249,8 @@ fn find_posix_end(p: &[char], start: usize) -> Option<usize> {
     None
 }
 
-/// Split `pat` on top-level `|` (respecting `\`, `[]`, `()`).
 fn split_top_level_alts(pat: &str) -> Vec<String> {
-    let p: Vec<char> = pat.chars().collect();
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    let mut i = 0;
-    let mut depth = 0i32;
-    let mut in_class = false;
-    while i < p.len() {
-        let c = p[i];
-        if c == '\\' && i + 1 < p.len() {
-            cur.push(c);
-            cur.push(p[i + 1]);
-            i += 2;
-            continue;
-        }
-        if in_class {
-            cur.push(c);
-            if c == ']' {
-                in_class = false;
-            }
-            i += 1;
-            continue;
-        }
-        match c {
-            '[' => {
-                in_class = true;
-                cur.push(c);
-            }
-            '(' => {
-                depth += 1;
-                cur.push(c);
-            }
-            ')' => {
-                depth -= 1;
-                cur.push(c);
-            }
-            '|' if depth == 0 => {
-                out.push(std::mem::take(&mut cur));
-            }
-            _ => cur.push(c),
-        }
-        i += 1;
-    }
-    out.push(cur);
-    out
+    crate::regex_prefilter::split_top_level_alts(pat)
 }
 
 /// Drop empty top-level alternatives (`فوق||foo` → `فوق|foo`) so a
@@ -284,35 +265,103 @@ fn strip_empty_top_alts(pat: &str) -> String {
     }
 }
 
+#[derive(Debug)]
+enum Engine {
+    /// DFA engine (`regex` crate) — used when the pattern has no lookaround/backrefs.
+    Rust { re: regex::Regex, re_notempty: regex::Regex },
+    Fancy { re: fancy_regex::Regex, re_notempty: fancy_regex::Regex },
+}
+
 /// A compiled rule pattern.
 #[derive(Debug)]
 pub struct Re {
-    re: Regex,
-    /// Pattern with empty top-level `|` alternatives removed; used for the
-    /// `wrapMatchAll` not-empty + anchored retry after a zero-width match.
-    re_notempty: Regex,
+    engine: Engine,
     source: String,
     n_groups: usize,
+    prefilter: Prefilter,
 }
 
 /// Byte spans of a match: index 0 is the whole match, then capture groups (None = unset).
 pub type Spans = Vec<Option<(usize, usize)>>;
 
+/// The DFA engine cannot express PCRE `$` (end or before a final newline) or lookaround.
+fn needs_fancy_engine(pat: &str) -> bool {
+    let p: Vec<char> = pat.chars().collect();
+    let mut i = 0;
+    let mut in_class = false;
+    while i < p.len() {
+        if p[i] == '\\' && i + 1 < p.len() {
+            let n = p[i + 1];
+            if !in_class && n.is_ascii_digit() && n != '0' {
+                return true;
+            }
+            i += 2;
+            continue;
+        }
+        if in_class {
+            if p[i] == ']' {
+                in_class = false;
+            }
+            i += 1;
+            continue;
+        }
+        match p[i] {
+            '[' => {
+                in_class = true;
+                i += 1;
+            }
+            '$' => return true,
+            '(' if i + 2 < p.len() && p[i + 1] == '?' && matches!(p[i + 2], '=' | '!' | '<') => {
+                return true;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 impl Re {
     /// Compiles a PCRE pattern, case-insensitively (as `Duckling.Types.regex` does).
     pub fn new(pattern: &str) -> Re {
+        let stripped = strip_empty_top_alts(pattern);
+        let prefilter = Prefilter::from_pattern(pattern);
+        if !needs_fancy_engine(pattern) && !needs_fancy_engine(&stripped) {
+            let rust_src = format!("(?i){}", translate_rust(pattern));
+            let rust_ne = format!("(?i){}", translate_rust(&stripped));
+            if let (Ok(re), Ok(re_notempty)) = (regex::Regex::new(&rust_src), regex::Regex::new(&rust_ne)) {
+                let n_groups = re.captures_len().saturating_sub(1);
+                return Re {
+                    engine: Engine::Rust { re, re_notempty },
+                    source: pattern.to_string(),
+                    n_groups,
+                    prefilter,
+                };
+            }
+        }
         let translated = format!("(?i){}", translate(pattern));
-        let re = Regex::new(&translated).unwrap_or_else(|e| {
+        let re = fancy_regex::Regex::new(&translated).unwrap_or_else(|e| {
             panic!("failed to compile pattern {:?} (translated {:?}): {}", pattern, translated, e)
         });
-        let stripped = strip_empty_top_alts(pattern);
         let ne_src = format!("(?i){}", translate(&stripped));
-        let re_notempty = Regex::new(&ne_src).unwrap_or_else(|_| {
-            // Fall back to the original if stripping produced something illegal.
-            Regex::new(&translated).expect("original pattern compiled")
+        let re_notempty = fancy_regex::Regex::new(&ne_src).unwrap_or_else(|_| {
+            fancy_regex::Regex::new(&translated).expect("original pattern compiled")
         });
         let n_groups = re.captures_len() - 1;
-        Re { re, re_notempty, source: pattern.to_string(), n_groups }
+        Re {
+            engine: Engine::Fancy { re, re_notempty },
+            source: pattern.to_string(),
+            n_groups,
+            prefilter,
+        }
+    }
+
+    /// Conservative skip: `false` means the regex cannot match this suffix.
+    pub fn may_match(&self, hay: &PrefilterHay, from_byte: usize) -> bool {
+        self.prefilter.may_match(hay, from_byte)
+    }
+
+    pub fn prefilter(&self) -> &Prefilter {
+        &self.prefilter
     }
 
     pub fn source(&self) -> &str {
@@ -323,15 +372,29 @@ impl Re {
         self.n_groups
     }
 
-    fn spans(caps: &fancy_regex::Captures<'_>) -> Spans {
+    #[cfg(test)]
+    pub(crate) fn uses_dfa(&self) -> bool {
+        matches!(self.engine, Engine::Rust { .. })
+    }
+
+    fn fancy_spans(caps: &fancy_regex::Captures<'_>) -> Spans {
         (0..caps.len()).map(|g| caps.get(g).map(|m| (m.start(), m.end()))).collect()
+    }
+
+    fn rust_spans(caps: &regex::Captures<'_>, shift: usize) -> Spans {
+        (0..caps.len())
+            .map(|g| caps.get(g).map(|m| (m.start() + shift, m.end() + shift)))
+            .collect()
     }
 
     /// First match anywhere in `text` (like `matchOnce`); `text` is the whole subject.
     pub fn match_once(&self, text: &str) -> Option<Spans> {
-        match self.re.captures(text) {
-            Ok(Some(c)) => Some(Self::spans(&c)),
-            _ => None,
+        match &self.engine {
+            Engine::Rust { re, .. } => re.captures(text).map(|c| Self::rust_spans(&c, 0)),
+            Engine::Fancy { re, .. } => match re.captures(text) {
+                Ok(Some(c)) => Some(Self::fancy_spans(&c)),
+                _ => None,
+            },
         }
     }
 
@@ -339,12 +402,23 @@ impl Re {
     /// `PCRE_NOTEMPTY|PCRE_ANCHORED`. If that fails, stop (do not walk the rest
     /// of the subject one character at a time).
     pub fn match_all(&self, text: &str) -> Vec<Spans> {
+        match &self.engine {
+            Engine::Rust { re, re_notempty } => Self::match_all_rust(text, re, re_notempty),
+            Engine::Fancy { re, re_notempty } => Self::match_all_fancy(text, re, re_notempty),
+        }
+    }
+
+    fn match_all_fancy(
+        text: &str,
+        re: &fancy_regex::Regex,
+        re_notempty: &fancy_regex::Regex,
+    ) -> Vec<Spans> {
         let mut res = Vec::new();
         let mut pos = 0usize;
         let mut notempty_anchored = false;
         while pos <= text.len() {
             let caps = if notempty_anchored {
-                match self.re_notempty.captures_from_pos(text, pos) {
+                match re_notempty.captures_from_pos(text, pos) {
                     Ok(Some(c)) => {
                         let m = c.get(0).unwrap();
                         if m.start() == pos && m.end() > pos {
@@ -356,7 +430,7 @@ impl Re {
                     _ => None,
                 }
             } else {
-                match self.re.captures_from_pos(text, pos) {
+                match re.captures_from_pos(text, pos) {
                     Ok(Some(c)) => Some(c),
                     _ => None,
                 }
@@ -365,7 +439,47 @@ impl Re {
                 Some(c) => {
                     let m = c.get(0).unwrap();
                     let (s, e) = (m.start(), m.end());
-                    res.push(Self::spans(&c));
+                    res.push(Self::fancy_spans(&c));
+                    if s == e {
+                        if s == text.len() {
+                            break;
+                        }
+                        notempty_anchored = true;
+                        pos = e;
+                    } else {
+                        notempty_anchored = false;
+                        pos = e;
+                    }
+                }
+                None => break,
+            }
+        }
+        res
+    }
+
+    fn match_all_rust(text: &str, re: &regex::Regex, re_notempty: &regex::Regex) -> Vec<Spans> {
+        let mut res = Vec::new();
+        let mut pos = 0usize;
+        let mut notempty_anchored = false;
+        while pos <= text.len() {
+            let suffix = &text[pos..];
+            let caps = if notempty_anchored {
+                re_notempty.captures(suffix).and_then(|c| {
+                    let m = c.get(0).unwrap();
+                    if m.start() == 0 && m.end() > 0 {
+                        Some(c)
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                re.captures(suffix)
+            };
+            match caps {
+                Some(c) => {
+                    let m = c.get(0).unwrap();
+                    let (s, e) = (pos + m.start(), pos + m.end());
+                    res.push(Self::rust_spans(&c, pos));
                     if s == e {
                         if s == text.len() {
                             break;
@@ -415,8 +529,10 @@ mod tests {
 
     #[test]
     fn dollar_matches_before_final_newline() {
-        assert!(Re::new(r"abc$").match_once("abc\n").is_some());
-        assert!(Re::new(r"abc$").match_once("abc\nx").is_none());
+        let r = Re::new(r"abc$");
+        assert!(!r.uses_dfa());
+        assert!(r.match_once("abc\n").is_some());
+        assert!(r.match_once("abc\nx").is_none());
     }
 
     #[test]
@@ -432,5 +548,12 @@ mod tests {
         assert_eq!(m[1], None);
         assert_eq!(m[2], Some((0, 1)));
         assert_eq!(r.n_groups(), 2);
+    }
+
+    #[test]
+    fn simple_patterns_use_dfa() {
+        assert!(Re::new("monday").uses_dfa());
+        assert!(Re::new(r"\bfoo\b").uses_dfa());
+        assert!(Re::new(r"\d{1,2}").uses_dfa());
     }
 }
