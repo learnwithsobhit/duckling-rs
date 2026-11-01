@@ -8,6 +8,7 @@ pub mod document;
 pub mod engine;
 pub mod json;
 pub mod lang_dims;
+pub mod langs;
 pub mod locale;
 pub mod ported;
 pub mod ranking;

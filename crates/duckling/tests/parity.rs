@@ -74,6 +74,13 @@ fn replay_haskell_fixtures() {
     let mut failures: Vec<String> = Vec::new();
     let mut skipped_by: HashMap<String, usize> = HashMap::new();
     let mut seen: HashSet<String> = HashSet::new();
+    // DUCKLING_PARITY_LANG=ES,FR restricts the replay to those languages (fast inner loop).
+    let only_langs: Option<Vec<String>> = std::env::var("DUCKLING_PARITY_LANG")
+        .ok()
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
+    // DUCKLING_PARITY_SHOW=N prints N failures (default 25).
+    let show: usize = std::env::var("DUCKLING_PARITY_SHOW").ok().and_then(|v| v.parse().ok()).unwrap_or(25);
+    let mut failed_by: HashMap<String, usize> = HashMap::new();
 
     for f in files {
         let text = fs::read_to_string(&f).unwrap();
@@ -81,9 +88,14 @@ fn replay_haskell_fixtures() {
             if !seen.insert(line.to_string()) {
                 continue; // identical record already replayed
             }
-            total += 1;
             let rec: Record = serde_json::from_str(line)
                 .unwrap_or_else(|e| panic!("bad fixture line in {:?}: {}", f, e));
+            if let Some(only) = &only_langs {
+                if !only.iter().any(|l| l.eq_ignore_ascii_case(&rec.lang)) {
+                    continue;
+                }
+            }
+            total += 1;
             let lang = Lang::parse(&rec.lang).expect("lang");
             let region = rec.region.as_deref().and_then(Region::parse);
             let locale = Locale::new(lang, region);
@@ -119,6 +131,7 @@ fn replay_haskell_fixtures() {
                 .collect();
             let got_text = duckling::json::Json::Arr(got).encode();
             if got_text != rec.entities.get() {
+                *failed_by.entry(format!("{}:{}", locale, rec.targets.join(","))).or_default() += 1;
                 failures.push(format!(
                     "{} {:?} targets={:?} latent={}\n  haskell: {}\n  rust:    {}",
                     locale,
@@ -145,10 +158,15 @@ fn replay_haskell_fixtures() {
         eprintln!("  skipped {:>6}  {}", n, k);
     }
     if !failures.is_empty() {
-        for f in failures.iter().take(25) {
+        let mut fb: Vec<_> = failed_by.into_iter().collect();
+        fb.sort_by(|a, b| b.1.cmp(&a.1));
+        for (k, n) in fb.iter().take(40) {
+            eprintln!("  failed  {:>6}  {}", n, k);
+        }
+        for f in failures.iter().take(show) {
             eprintln!("FAIL {}", f);
         }
-        panic!("{} parity failures (showing up to 25 above)", failures.len());
+        panic!("{} parity failures (showing up to {} above)", failures.len(), show);
     }
     if std::env::var("DUCKLING_PARITY_STRICT").is_ok() && skipped > 0 {
         panic!("{} fixture records skipped", skipped);

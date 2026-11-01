@@ -34,47 +34,16 @@ fn common_rules(dim: Dim) -> Vec<&'static Rule> {
     }
 }
 
-fn en_lang_rules(dim: Dim) -> Vec<&'static Rule> {
-    match dim {
-        Dim::AmountOfMoney => dims::amount_of_money::en_rules().iter().collect(),
-        Dim::Distance => dims::distance::en_rules().iter().collect(),
-        Dim::Duration => dims::duration::en_rules().iter().collect(),
-        Dim::Email => dims::email::en_rules().iter().collect(),
-        Dim::Numeral => dims::numeral::en::rules().iter().collect(),
-        Dim::Ordinal => dims::ordinal::en_rules().iter().collect(),
-        Dim::Quantity => dims::quantity::en_rules().iter().collect(),
-        Dim::Temperature => dims::temperature::en_rules().iter().collect(),
-        Dim::Time => dims::time::en::rules().iter().collect(),
-        Dim::TimeGrain => dims::time_grain::en_rules().iter().collect(),
-        Dim::Volume => dims::volume::en_rules().iter().collect(),
-        _ => Vec::new(),
-    }
-}
-
 fn lang_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {
-    match lang {
-        Lang::EN => en_lang_rules(dim),
-        _ => Vec::new(),
-    }
+    crate::langs::lang_rules(lang, dim)
 }
 
 fn locale_rules(lang: Lang, region: Region, dim: Dim) -> Vec<&'static Rule> {
-    match (lang, dim) {
-        (Lang::EN, Dim::AmountOfMoney) => dims::amount_of_money::en_region_rules(region).iter().collect(),
-        (Lang::EN, Dim::Time) => dims::time::locales::en_rules(region).iter().collect(),
-        _ => Vec::new(),
-    }
+    crate::langs::locale_rules(lang, region, dim)
 }
 
 fn default_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {
-    match (lang, dim) {
-        (Lang::EN, Dim::Time) => {
-            let mut v: Vec<&'static Rule> = dims::time::locales::backward_compatible().iter().collect();
-            v.extend(lang_rules(lang, dim));
-            v
-        }
-        _ => lang_rules(lang, dim),
-    }
+    crate::langs::default_rules(lang, dim)
 }
 
 fn rules_for_dim(locale: Locale, dim: Dim) -> Vec<&'static Rule> {
