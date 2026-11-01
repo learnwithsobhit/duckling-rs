@@ -59,6 +59,7 @@ fn en_lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Ordinal => dims::ordinal::en_rules().iter().collect(),
         Dim::Quantity => dims::quantity::en_rules().iter().collect(),
         Dim::Temperature => dims::temperature::en_rules().iter().collect(),
+        Dim::Time => dims::time::en::rules().iter().collect(),
         Dim::TimeGrain => dims::time_grain::en_rules().iter().collect(),
         Dim::Volume => dims::volume::en_rules().iter().collect(),
         _ => Vec::new(),
@@ -75,12 +76,20 @@ fn lang_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {
 fn locale_rules(lang: Lang, region: Region, dim: Dim) -> Vec<&'static Rule> {
     match (lang, dim) {
         (Lang::EN, Dim::AmountOfMoney) => dims::amount_of_money::en_region_rules(region).iter().collect(),
+        (Lang::EN, Dim::Time) => dims::time::locales::en_rules(region).iter().collect(),
         _ => Vec::new(),
     }
 }
 
 fn default_rules(lang: Lang, dim: Dim) -> Vec<&'static Rule> {
-    lang_rules(lang, dim)
+    match (lang, dim) {
+        (Lang::EN, Dim::Time) => {
+            let mut v: Vec<&'static Rule> = dims::time::locales::backward_compatible().iter().collect();
+            v.extend(lang_rules(lang, dim));
+            v
+        }
+        _ => lang_rules(lang, dim),
+    }
 }
 
 fn rules_for_dim(locale: Locale, dim: Dim) -> Vec<&'static Rule> {

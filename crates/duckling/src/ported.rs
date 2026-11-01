@@ -20,7 +20,8 @@ pub fn is_ported(locale: Locale, dim: Dim) -> bool {
             | Dim::Temperature
             | Dim::Volume
             | Dim::Quantity
-            | Dim::AmountOfMoney,
+            | Dim::AmountOfMoney
+            | Dim::Time,
         ) => true,
         _ => false,
     }
