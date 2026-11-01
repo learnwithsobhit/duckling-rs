@@ -152,6 +152,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "duckling-train"
+version = "0.1.0"
+dependencies = [
+ "duckling",
+ "serde_json",
+]
+
+[[package]]
 name = "duckling-wasm"
 version = "0.1.0"
 dependencies = [

@@ -89,7 +89,7 @@ pub fn classifiers(locale: Locale) -> &'static Classifiers {
 }
 
 /// `extractFeatures`: a bag of (at most two) features.
-fn extract_features(node: &Node) -> Vec<(String, i64)> {
+pub fn extract_features(node: &Node) -> Vec<(String, i64)> {
     let feat_rules: String = node.children.iter().filter_map(|c| c.rule.as_deref()).collect();
     let grains: String = node
         .children
