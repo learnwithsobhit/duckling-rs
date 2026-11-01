@@ -11,6 +11,7 @@ mod numeral;
 mod ordinal;
 mod quantity;
 mod temperature;
+mod time;
 mod time_grain;
 mod volume;
 
@@ -26,6 +27,10 @@ pub const PORTED: &[Dim] = &[
     Dim::Quantity,
     Dim::AmountOfMoney,
     Dim::Email,
+    Dim::Url,
+    Dim::PhoneNumber,
+    Dim::CreditCardNumber,
+    Dim::Time,
 ];
 
 /// `langRules`.
@@ -39,6 +44,7 @@ pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Ordinal => ordinal::rules().iter().collect(),
         Dim::Quantity => quantity::rules().iter().collect(),
         Dim::Temperature => temperature::rules().iter().collect(),
+        Dim::Time => time::rules().iter().collect(),
         Dim::TimeGrain => time_grain::rules().iter().collect(),
         Dim::Volume => volume::rules().iter().collect(),
         _ => Vec::new(),
