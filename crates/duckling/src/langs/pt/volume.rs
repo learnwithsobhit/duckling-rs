@@ -1,0 +1,31 @@
+//! `Duckling.Volume.PT.Rules`.
+
+use once_cell::sync::Lazy;
+
+use crate::dims::volume::{is_unit_only, unit_only, volume, Unit, VolumeData};
+use crate::types::{pred, regex, rule, Rule, Token};
+
+static RULES: Lazy<Vec<Rule>> = Lazy::new(|| {
+    let volumes: [(&str, &str, Unit); 4] = [
+        ("<latent vol> ml", "m(l|ililitros?)", Unit::Millilitre),
+        ("<vol> hectoliters", "(hectolitros?)", Unit::Hectolitre),
+        ("<vol> liters", "l(itros?)?", Unit::Litre),
+        ("<latent vol> gallon", "gal(a|ã|o|õ)o?e?s?", Unit::Gallon),
+    ];
+    let mut v: Vec<Rule> = Vec::new();
+    for (name, re, u) in volumes {
+        v.push(rule(name, vec![regex(re)], move |_| Some(Token::Volume(unit_only(u)))));
+    }
+    let fractions: [(&str, &str, f64); 1] = [("half", "meio", 1.0 / 2.0)];
+    for (name, re, f) in fractions {
+        v.push(rule(name, vec![regex(re), pred(is_unit_only)], move |ts| match ts.get(1)? {
+            Token::Volume(VolumeData { unit: Some(u), .. }) => Some(Token::Volume(volume(*u, f))),
+            _ => None,
+        }));
+    }
+    v
+});
+
+pub fn rules() -> &'static [Rule] {
+    &RULES
+}
