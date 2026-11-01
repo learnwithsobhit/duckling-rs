@@ -119,8 +119,14 @@ impl Document {
     }
 
     fn default_is_range_valid(&self, start: usize, end: usize) -> bool {
+        let n = self.len();
+        // Empty match at EOF (`start == n`) would index `chars[start]` out of bounds.
+        // Haskell PCRE `matchAll` does not emit a match starting at `length`; reject it.
+        if start >= n || end > n {
+            return false;
+        }
         (start == 0 || is_different(self.chars[start - 1], self.chars[start]))
-            && (end == self.len() || is_different(self.chars[end - 1], self.chars[end]))
+            && (end == n || is_different(self.chars[end - 1], self.chars[end]))
     }
 
     fn zh_is_range_valid(&self, start: usize, end: usize) -> bool {
