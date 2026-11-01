@@ -108,7 +108,7 @@ fn utc_of(y: i64, mo: i64, d: i64, h: i64, mi: i64, s: i64) -> UtcTime {
 }
 
 fn test_context(locale: Locale, reference_time: DucklingTime) -> Context {
-    Context { locale, reference_time }
+    Context { locale, reference_time, time_zones: None }
 }
 
 /// `Duckling.Time.Corpus.check`: compare JSON after dropping the `values` key.

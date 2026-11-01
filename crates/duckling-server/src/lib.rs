@@ -3,7 +3,7 @@
 //! * `GET /` answers `quack!`
 //! * `GET /targets` lists the dimensions supported per language
 //! * `POST /parse` takes the form fields `text`, `lang`, `locale`, `dims`, `tz`, `reftime`,
-//!   `latent` and answers a JSON array of entities.
+//!   `latent`, `location_tz` and answers a JSON array of entities.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -93,6 +93,7 @@ async fn parse(State(state): State<Arc<AppState>>, body: Bytes) -> Response {
         tz: param(&body, "tz"),
         reftime: param(&body, "reftime"),
         latent: param(&body, "latent"),
+        location_tz: param(&body, "location_tz"),
     };
     // Parsing is CPU-bound; keep it off the async workers' hot path.
     let result = tokio::task::spawn_blocking(move || handle_parse(&params, &state.tzs, now_unix_ms()))

@@ -32,6 +32,7 @@ Each row is an intentional change from Haskell. The new behaviour is locked by
 | P8 | [#174](https://github.com/facebook/duckling/issues/174) weekday/hour ranges | Overlapping parses of `Mon-Fri 7am-7pm CST, Sat-Sun 8am-6pm CST` | Unchanged | Ranking/overlap; no safe local fix without regressing other interval corpora |
 | P9 | [#13](https://github.com/facebook/duckling/issues/13) second Sunday vs Thursday | `the second sunday of October last year` resolves inconsistently | Unchanged | Same ranking/intersect family as P8 |
 | P10 | [#131](https://github.com/facebook/duckling/issues/131) Arabic intra-word matches | `أحد` (Sunday) matched inside `وأحدث` | Arabic letters are `Alpha` plus proclitic rules; intra-word Sunday is rejected | Already implied by the AR range-valid port; locked by test |
+| P11 | location timezone | `now in Delhi` / `today in Delhi` empty | Opt-in `location_tz=true` city allowlist (`Dim::Timezone`); default parse unchanged | Not upstream |
 
 ## Port notes (not parser divergences)
 

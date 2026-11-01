@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use crate::api::{parse, supported_dimensions};
 use crate::dims::time::calendar::add_seconds;
+use crate::dims::timezone::zones_used_by_cities;
 use crate::json::Json;
 use crate::locale::{Lang, Locale, Region};
 use crate::time_zone::{DucklingTime, TimeZone, TimeZoneSeries, UtcTime};
@@ -20,6 +21,7 @@ pub struct ParseParams {
     pub tz: Option<String>,
     pub reftime: Option<String>,
     pub latent: Option<String>,
+    pub location_tz: Option<String>,
 }
 
 /// A failed request: HTTP status plus body.
@@ -123,12 +125,20 @@ pub fn handle_parse(
         None => Locale::new(lang, None),
     };
     let options = Options { with_latent: parse_latent(&p.latent) };
-    let dims: Vec<Dim> = p
+    let location_tz = parse_latent(&p.location_tz);
+    let mut dims: Vec<Dim> = p
         .dims
         .as_deref()
         .and_then(parse_dims)
         .unwrap_or_else(|| crate::api::all_dimensions(lang));
-    let context = Context { reference_time, locale };
+    if location_tz && !dims.contains(&Dim::Timezone) {
+        dims.push(Dim::Timezone);
+    }
+    let context = Context {
+        reference_time,
+        locale,
+        time_zones: if location_tz { Some(zones_used_by_cities(tzs)) } else { None },
+    };
     let (entities, used_reftime) =
         crate::dims::time::types::probe_reference_time_use(|| parse(text, &context, &options, &dims));
     if reftime_invalid && used_reftime {
@@ -149,9 +159,9 @@ pub fn handle_targets() -> String {
 
 impl ParseParams {
     /// Build parameters from a JSON object with the same field names as the HTTP form
-    /// (`text`, `lang`, `locale`, `dims`, `tz`, `reftime`, `latent`). Besides strings, `dims` may
-    /// be an array of names, `reftime` a number (milliseconds since the epoch) and `latent` a
-    /// boolean, which is how JavaScript callers naturally pass them.
+    /// (`text`, `lang`, `locale`, `dims`, `tz`, `reftime`, `latent`, `location_tz`). Besides
+    /// strings, `dims` may be an array of names, `reftime` a number (milliseconds since the epoch)
+    /// and `latent` / `location_tz` booleans, which is how JavaScript callers naturally pass them.
     pub fn from_json(v: &serde_json::Value) -> Result<ParseParams, String> {
         let obj = v.as_object().ok_or("request must be a JSON object")?;
         fn text(v: &serde_json::Value) -> Option<String> {
@@ -170,6 +180,7 @@ impl ParseParams {
             tz: get("tz"),
             reftime: get("reftime"),
             latent: get("latent"),
+            location_tz: get("location_tz"),
         })
     }
 }
@@ -185,6 +196,7 @@ mod tests {
         )
         .unwrap();
         let p = ParseParams::from_json(&v).unwrap();
+        assert!(p.location_tz.is_none());
         assert_eq!(p.dims.as_deref(), Some(r#"["time"]"#));
         assert_eq!(p.reftime.as_deref(), Some("1700000000000"));
         assert_eq!(p.latent.as_deref(), Some("true"));

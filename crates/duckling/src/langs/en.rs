@@ -35,6 +35,7 @@ pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
         Dim::Temperature => dims::temperature::en_rules().iter().collect(),
         Dim::Time => dims::time::en::rules().iter().collect(),
         Dim::TimeGrain => dims::time_grain::en_rules().iter().collect(),
+        Dim::Timezone => dims::timezone::en::rules().iter().collect(),
         Dim::Volume => dims::volume::en_rules().iter().collect(),
         _ => Vec::new(),
     }

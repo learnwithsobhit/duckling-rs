@@ -122,6 +122,7 @@ fn replay_haskell_fixtures() {
             let ctx = Context {
                 reference_time: DucklingTime { utc: UtcTime::new(rec.ref_utc.mjd, rec.ref_utc.psecs), series },
                 locale,
+                time_zones: None,
             };
             let opts = Options { with_latent: rec.latent };
             let tset: HashSet<Dim> = targets.iter().copied().collect();

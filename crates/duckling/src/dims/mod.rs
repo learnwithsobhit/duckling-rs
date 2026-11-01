@@ -13,6 +13,7 @@ pub mod quantity;
 pub mod temperature;
 pub mod time;
 pub mod time_grain;
+pub mod timezone;
 pub mod url;
 pub mod util;
 pub mod volume;

@@ -14,6 +14,7 @@ fn test_context(lang: Lang) -> Context {
             series: TimeZoneSeries::fixed(-120),
         },
         locale: Locale::new(lang, None),
+        time_zones: None,
     }
 }
 

@@ -67,7 +67,36 @@ pub fn format_token(sentence: &str, r: &Resolved) -> Entity {
 /// `parse`: curated list of entities found in `input`.
 pub fn parse(input: &str, context: &Context, options: &Options, dims: &[Dim]) -> Vec<Entity> {
     let targets: HashSet<Dim> = dims.iter().copied().collect();
-    analyze(input, context, options, &targets).iter().map(|r| format_token(input, r)).collect()
+    let mut ents: Vec<Entity> =
+        analyze(input, context, options, &targets).iter().map(|r| format_token(input, r)).collect();
+    if targets.contains(&Dim::Timezone) {
+        sort_location_tz(&mut ents);
+    }
+    ents
+}
+
+fn dim_priority(dim: &str) -> u8 {
+    match dim {
+        "time" => 0,
+        "timezone" => 1,
+        _ => 2,
+    }
+}
+
+fn city_rank(e: &Entity) -> u8 {
+    let iana = e.value.get("timezone").and_then(|v| v.as_str()).unwrap_or("");
+    let city = e.value.get("city").and_then(|v| v.as_str()).unwrap_or("");
+    crate::dims::timezone::rank_of(iana, city)
+}
+
+fn sort_location_tz(ents: &mut [Entity]) {
+    ents.sort_by(|a, b| {
+        a.start
+            .cmp(&b.start)
+            .then(a.end.cmp(&b.end))
+            .then(dim_priority(a.dim).cmp(&dim_priority(b.dim)))
+            .then(city_rank(a).cmp(&city_rank(b)))
+    });
 }
 
 /// Dimensions supported by a language (`Duckling.Dimensions.allDimensions`).

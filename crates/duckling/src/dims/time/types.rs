@@ -12,7 +12,7 @@ use std::sync::Arc;
 use super::calendar::*;
 use crate::dims::time_grain::Grain;
 use crate::json::Json;
-use crate::time_zone::{TimeZoneSeries, UtcTime};
+use crate::time_zone::{TimeZone, TimeZoneSeries, UtcTime};
 use crate::types::{Context, Options};
 
 // ----- lazy lists ----------------------------------------------------------------------------
@@ -832,6 +832,30 @@ pub struct TimeData {
     pub holiday: Option<Arc<str>>,
     /// Hack to prevent double timezone parsing.
     pub has_timezone: bool,
+    /// When set, resolve this predicate in the named city zone instead of the request zone.
+    pub resolve_zone: Option<Arc<ResolveZone>>,
+}
+
+/// City zone used when resolving a Time token produced by location-timezone rules.
+#[derive(Clone, Debug)]
+pub struct ResolveZone {
+    pub iana: &'static str,
+    pub city: &'static str,
+    pub fallback_offset_min: i32,
+    pub rank: u8,
+}
+
+impl PartialEq for ResolveZone {
+    fn eq(&self, o: &ResolveZone) -> bool {
+        self.iana == o.iana && self.city == o.city
+    }
+}
+impl Eq for ResolveZone {}
+impl Hash for ResolveZone {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.iana.hash(h);
+        self.city.hash(h);
+    }
 }
 
 impl std::fmt::Debug for TimeData {
@@ -853,13 +877,15 @@ impl PartialEq for TimeData {
             && self.form == o.form
             && self.direction == o.direction
             && self.has_timezone == o.has_timezone
+            && self.resolve_zone == o.resolve_zone
     }
 }
 impl Eq for TimeData {}
 
 impl Hash for TimeData {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        (self.latent, self.time_grain, self.not_immediate, self.form, self.direction).hash(h)
+        (self.latent, self.time_grain, self.not_immediate, self.form, self.direction).hash(h);
+        self.resolve_zone.hash(h);
     }
 }
 
@@ -875,6 +901,7 @@ pub fn timedata() -> TimeData {
         ok_for_this_next: false,
         holiday: None,
         has_timezone: false,
+        resolve_zone: None,
     }
 }
 
@@ -978,6 +1005,32 @@ fn time_context_from(ctx: &Context) -> TimeContext {
     }
 }
 
+fn time_context_in_zone(ctx: &Context, zone: &ResolveZone) -> TimeContext {
+    let wall = ctx.reference_time.utc;
+    let real = utc_from_wall(&ctx.reference_time.series, wall);
+    let series = ctx
+        .time_zones
+        .as_ref()
+        .and_then(|m| m.get(zone.iana).cloned())
+        .unwrap_or_else(|| TimeZoneSeries {
+            default_zone: TimeZone {
+                offset_minutes: zone.fallback_offset_min,
+                summer_only: false,
+                name: zone.iana.to_string(),
+            },
+            transitions: Vec::new(),
+        });
+    let city_off = series.zone_at(real).offset_minutes as i128;
+    let city_wall = add_seconds(real, city_off * 60);
+    let ref_time = TimeObject { start: city_wall, grain: Grain::Second, end: None };
+    TimeContext {
+        ref_time,
+        tz_series: Arc::new(series),
+        max_time: time_plus(&ref_time, Grain::Year, 2000),
+        min_time: time_plus(&ref_time, Grain::Year, -2000),
+    }
+}
+
 /// Reuse one [`TimeContext`] for every Time resolve in a parse (same reference time).
 pub fn with_resolve_context<R>(ctx: &Context, f: impl FnOnce() -> R) -> R {
     let tc = time_context_from(ctx);
@@ -1008,7 +1061,10 @@ impl TimeData {
             }
         });
         let owned;
-        let tc = if let Some(cached) = RESOLVE_TC.with(|c| c.borrow().clone()) {
+        let tc = if let Some(zone) = &self.resolve_zone {
+            owned = time_context_in_zone(ctx, zone);
+            owned
+        } else if let Some(cached) = RESOLVE_TC.with(|c| c.borrow().clone()) {
             cached
         } else {
             owned = time_context_from(ctx);
@@ -1043,6 +1099,10 @@ impl TimeData {
         obj.insert("values".to_string(), Json::Arr(vs));
         if let Some(h) = &self.holiday {
             obj.insert("holidayBeta".to_string(), Json::str(h.to_string()));
+        }
+        if let Some(z) = &self.resolve_zone {
+            obj.insert("timezone".to_string(), Json::str(z.iana));
+            obj.insert("city".to_string(), Json::str(z.city));
         }
         Some((Json::Obj(obj), self.latent))
     }

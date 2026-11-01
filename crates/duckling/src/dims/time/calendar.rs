@@ -1,7 +1,7 @@
 //! Proleptic Gregorian calendar helpers matching the parts of `Data.Time.Calendar` Duckling uses.
 //! Days are Modified Julian Day numbers (`i64`).
 
-use crate::time_zone::{UtcTime, PSECS_PER_DAY};
+use crate::time_zone::{TimeZoneSeries, UtcTime, PSECS_PER_DAY};
 
 pub const PSECS_PER_SEC: i64 = 1_000_000_000_000;
 
@@ -127,6 +127,22 @@ pub fn add_seconds(t: UtcTime, secs: i128) -> UtcTime {
     let days = total.div_euclid(PSECS_PER_DAY as i128);
     let ps = total.rem_euclid(PSECS_PER_DAY as i128);
     UtcTime { mjd: (t.mjd as i128 + days) as i64, psecs: ps as i64 }
+}
+
+/// Inverse of [`crate::service::make_reftime`]: Duckling stores wall clock as fake UTC
+/// (`wall = utc + offset(utc)`). TZif transitions are UTC, so `zone_at(wall)` is the wrong
+/// lookup near DST changes. Iterate until `offset(utc)` is consistent with the stored wall.
+pub fn utc_from_wall(series: &TimeZoneSeries, wall: UtcTime) -> UtcTime {
+    let mut off = series.zone_at(wall).offset_minutes as i128;
+    for _ in 0..4 {
+        let utc = add_seconds(wall, -off * 60);
+        let next = series.zone_at(utc).offset_minutes as i128;
+        if next == off {
+            return utc;
+        }
+        off = next;
+    }
+    add_seconds(wall, -off * 60)
 }
 
 /// `diffUTCTime x y` in picoseconds.

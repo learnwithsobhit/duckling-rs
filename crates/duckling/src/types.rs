@@ -1,6 +1,7 @@
 //! Core types (port of `Duckling.Types`, `Duckling.Resolve` and `Duckling.Regex.Types`).
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -17,12 +18,13 @@ use crate::dims::quantity::QuantityData;
 use crate::dims::temperature::TemperatureData;
 use crate::dims::time::types::TimeData;
 use crate::dims::time_grain::Grain;
+use crate::dims::timezone::TimezoneData;
 use crate::dims::url::UrlData;
 use crate::dims::volume::VolumeData;
 use crate::json::Json;
 use crate::locale::Locale;
 use crate::regex_tr::Re;
-use crate::time_zone::DucklingTime;
+use crate::time_zone::{DucklingTime, TimeZoneSeries};
 
 /// Half-open range of code point offsets. Ordered like Haskell's derived `Ord`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -41,6 +43,9 @@ impl Range {
 pub struct Context {
     pub reference_time: DucklingTime,
     pub locale: Locale,
+    /// Olson database used by location-timezone rules. `None` skips named-zone lookup
+    /// (cities still resolve with their baked-in fallback offset).
+    pub time_zones: Option<Arc<HashMap<String, TimeZoneSeries>>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -65,6 +70,7 @@ pub enum Dim {
     Temperature,
     Time,
     TimeGrain,
+    Timezone,
     Url,
     Volume,
 }
@@ -83,6 +89,7 @@ impl Dim {
         Dim::Temperature,
         Dim::Time,
         Dim::TimeGrain,
+        Dim::Timezone,
         Dim::Url,
         Dim::Volume,
     ];
@@ -103,6 +110,7 @@ impl Dim {
             Dim::Temperature => "temperature",
             Dim::Time => "time",
             Dim::TimeGrain => "time-grain",
+            Dim::Timezone => "timezone",
             Dim::Url => "url",
             Dim::Volume => "volume",
         }
@@ -126,6 +134,7 @@ impl Dim {
             | Dim::Volume => &[Dim::Numeral],
             Dim::Duration => &[Dim::Numeral, Dim::TimeGrain],
             Dim::Time => &[Dim::Numeral, Dim::Duration, Dim::Ordinal, Dim::TimeGrain],
+            Dim::Timezone => &[Dim::Time],
         }
     }
 }
@@ -150,6 +159,7 @@ pub enum Token {
     Temperature(TemperatureData),
     Time(TimeData),
     TimeGrain(Grain),
+    Timezone(TimezoneData),
     Url(UrlData),
     Volume(VolumeData),
 }
@@ -170,6 +180,7 @@ impl Token {
             Token::Temperature(_) => Dim::Temperature,
             Token::Time(_) => Dim::Time,
             Token::TimeGrain(_) => Dim::TimeGrain,
+            Token::Timezone(_) => Dim::Timezone,
             Token::Url(_) => Dim::Url,
             Token::Volume(_) => Dim::Volume,
         }
@@ -191,6 +202,7 @@ impl Token {
             Token::Temperature(d) => d.resolve(ctx, opts),
             Token::Time(d) => d.resolve(ctx, opts),
             Token::TimeGrain(_) => None,
+            Token::Timezone(d) => d.resolve(ctx, opts),
             Token::Url(d) => Some((d.resolve(), false)),
             Token::Volume(d) => d.resolve(ctx, opts),
         }
@@ -213,6 +225,7 @@ impl PartialEq for Token {
             (Token::Temperature(a), Token::Temperature(b)) => a == b,
             (Token::Time(a), Token::Time(b)) => a == b,
             (Token::TimeGrain(a), Token::TimeGrain(b)) => a == b,
+            (Token::Timezone(a), Token::Timezone(b)) => a == b,
             (Token::Url(a), Token::Url(b)) => a == b,
             (Token::Volume(a), Token::Volume(b)) => a == b,
             _ => false,
@@ -238,6 +251,7 @@ impl Hash for Token {
             Token::Temperature(a) => a.hash(h),
             Token::Time(a) => a.hash(h),
             Token::TimeGrain(a) => a.hash(h),
+            Token::Timezone(a) => a.hash(h),
             Token::Url(a) => a.hash(h),
             Token::Volume(a) => a.hash(h),
         }

@@ -36,7 +36,7 @@ impl Duckling {
     }
 
     /// Parses text. `request` is a JSON object with the fields of `POST /parse`
-    /// (`text`, `lang`, `locale`, `dims`, `tz`, `reftime`, `latent`); `reftime` defaults to now.
+    /// (`text`, `lang`, `locale`, `dims`, `tz`, `reftime`, `latent`, `location_tz`); `reftime` defaults to now.
     /// Returns the JSON array of entities as text.
     pub fn parse(&self, request: &str) -> Result<String, JsError> {
         let v: serde_json::Value = serde_json::from_str(request).map_err(|e| JsError::new(&e.to_string()))?;

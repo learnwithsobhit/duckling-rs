@@ -585,6 +585,7 @@ mod prefilter_stats {
                     series: crate::time_zone::TimeZoneSeries::fixed(-120),
                 },
                 locale: Locale::new(lang, None),
+                time_zones: None,
             };
             let rules = rules_for(ctx.locale, &HashSet::from([Dim::Time]));
             let _ = parse_and_resolve(&rules, text, &ctx, &crate::types::Options { with_latent: false });

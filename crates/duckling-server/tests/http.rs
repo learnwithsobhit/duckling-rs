@@ -39,6 +39,7 @@ async fn targets_lists_languages() {
     let v: serde_json::Value = serde_json::from_str(&b).unwrap();
     assert_eq!(v.as_object().unwrap().len(), 49);
     assert!(v["en"].as_array().unwrap().iter().any(|d| d == "time"));
+    assert!(v["en"].as_array().unwrap().iter().all(|d| d != "timezone"));
 }
 
 #[tokio::test]
@@ -76,4 +77,17 @@ async fn time_in_zone_with_reftime() {
 async fn unknown_zone_falls_back_to_utc() {
     let (_, b) = call(post("text=at+5pm&dims=%5B%22time%22%5D&tz=Nowhere%2FLand&reftime=1700000000000")).await;
     assert!(b.contains("+00:00"), "{b}");
+}
+
+#[tokio::test]
+async fn location_tz_opt_in() {
+    let off = call(post("text=now+in+delhi&dims=%5B%22time%22%5D&tz=America%2FLos_Angeles")).await.1;
+    assert!(!off.contains("Asia/Kolkata"), "{off}");
+    let on = call(post(
+        "text=now+in+delhi&dims=%5B%22time%22%5D&tz=America%2FLos_Angeles&location_tz=true",
+    ))
+    .await
+    .1;
+    assert!(on.contains("Asia/Kolkata"), "{on}");
+    assert!(on.contains(r#""dim":"timezone""#), "{on}");
 }

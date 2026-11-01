@@ -63,6 +63,10 @@ curl -s -XPOST http://127.0.0.1:8000/parse \
 # India wall clock, Indian English date/holiday rules
 curl -s -XPOST http://127.0.0.1:8000/parse \
   --data 'locale=en_IN&text=now&tz=Asia/Kolkata'
+
+# Current instant printed in a named city (opt-in; off by default)
+curl -s -XPOST http://127.0.0.1:8000/parse \
+  --data 'locale=en_US&text=now in delhi&tz=America/Los_Angeles&dims=["time"]&location_tz=true'
 ```
 
 Form fields (same as upstream):
@@ -76,6 +80,7 @@ Form fields (same as upstream):
 | `reftime` | server `now` | Unix milliseconds; the “now” the parser resolves against |
 | `dims` | all | JSON array, e.g. `["time"]` |
 | `latent` | `false` | Also return weak parses (`7` as an hour) |
+| `location_tz` | `false` | Opt-in: resolve `now/today/5pm in <city>` in that city’s zone |
 
 `locale` chooses **rules** (date order, holidays, currency). `tz` chooses **which clock** to print. They are independent: `locale=en_IN&tz=Asia/Kolkata` is Indian English in IST; `locale=en_US&tz=Asia/Kolkata` is US English rules on an IST clock.
 
@@ -131,6 +136,7 @@ let tzs = HashMap::<String, TimeZoneSeries>::new();
 let ctx = Context {
     locale: Locale::new(Lang::EN, None),
     reference_time: make_reftime(&tzs, "UTC", UtcTime::from_unix_millis(now_ms)),
+    time_zones: None,
 };
 let hits = parse("in 2 days", &ctx, &Options { with_latent: false }, &[Dim::Time]);
 ```
