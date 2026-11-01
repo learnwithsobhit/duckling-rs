@@ -3,8 +3,10 @@
 use crate::locale::Region;
 use crate::types::{Dim, Rule};
 
+mod amount_of_money;
 mod distance;
 mod duration;
+mod email;
 mod numeral;
 mod ordinal;
 mod quantity;
@@ -22,13 +24,17 @@ pub const PORTED: &[Dim] = &[
     Dim::Temperature,
     Dim::Volume,
     Dim::Quantity,
+    Dim::AmountOfMoney,
+    Dim::Email,
 ];
 
 /// `langRules`.
 pub fn lang_rules(dim: Dim) -> Vec<&'static Rule> {
     match dim {
+        Dim::AmountOfMoney => amount_of_money::rules().iter().collect(),
         Dim::Distance => distance::rules().iter().collect(),
         Dim::Duration => duration::rules().iter().collect(),
+        Dim::Email => email::rules().iter().collect(),
         Dim::Numeral => numeral::rules().iter().collect(),
         Dim::Ordinal => ordinal::rules().iter().collect(),
         Dim::Quantity => quantity::rules().iter().collect(),
